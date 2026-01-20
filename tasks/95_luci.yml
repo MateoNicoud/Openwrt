@@ -1,0 +1,73 @@
+---
+- name: Configure uhttpd for LuCI hardening
+  when: 
+    - enable_luci_hardening | bool
+    - enable_luci | bool
+  block:
+    - name: Set HTTPS listener (mgmt only)
+      community.openwrt.uci:
+        command: set
+        key: "uhttpd.main.listen_https"
+        value:
+          - "{{ luci_bind_ip }}:{{ luci_https_port }}"
+      notify: restart_uhttpd
+
+    - name: Set HTTP listener (mgmt only) - used only for redirect
+      when: luci_redirect_http_to_https | bool
+      community.openwrt.uci:
+        command: set
+        key: "uhttpd.main.listen_http"
+        value:
+          - "{{ luci_bind_ip }}:{{ luci_http_port }}"
+      notify: restart_uhttpd
+
+    - name: Disable HTTP listener if redirect disabled
+      when: not luci_redirect_http_to_https | bool
+      community.openwrt.uci:
+        command: delete
+        key: "uhttpd.main.listen_http"
+      ignore_errors: true
+      notify: restart_uhttpd
+
+    - name: Enable redirect HTTP->HTTPS
+      when: luci_redirect_http_to_https | bool
+      community.openwrt.uci:
+        command: set
+        key: "uhttpd.main.redirect_https"
+        value: "1"
+      notify: restart_uhttpd
+
+    - name: Commit uhttpd
+      community.openwrt.uci:
+        command: commit
+        config: uhttpd
+      notify: restart_uhttpd
+
+- name: Disable web UI completely (uhttpd)
+  when: not (enable_luci | bool)
+  block:
+    - name: Stop and disable uhttpd
+      community.openwrt.service:
+        name: uhttpd
+        enabled: false
+        state: stopped
+
+    - name: Disable LuCI listeners in uhttpd config (defensive)
+      community.openwrt.uci:
+        command: delete
+        key: "uhttpd.main.listen_http"
+      ignore_errors: true
+      notify: restart_uhttpd
+
+    - name: Disable LuCI HTTPS listener in uhttpd config (defensive)
+      community.openwrt.uci:
+        command: delete
+        key: "uhttpd.main.listen_https"
+      ignore_errors: true
+      notify: restart_uhttpd
+
+    - name: Commit uhttpd
+      community.openwrt.uci:
+        command: commit
+        config: uhttpd
+      notify: restart_uhttpd

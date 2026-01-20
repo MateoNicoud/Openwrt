@@ -1,0 +1,53 @@
+---
+- name: Assert openwrt_wifi_radios is defined
+  ansible.builtin.assert:
+    that:
+      - openwrt_wifi_radios is defined
+      - openwrt_wifi_radios is iterable
+    fail_msg: "Define openwrt_wifi_radios (list) in host_vars/group_vars, e.g. [] or [radio0]."
+    quiet: true
+
+- name: Discover existing WiFi radios (radio*)
+  community.openwrt.command:
+    command: |
+      set -e
+      uci show wireless 2>/dev/null \
+        | sed -n "s/^wireless\.\(radio[0-9]\+\)\..*/\1/p" \
+        | sort -u
+    uses_shell: true
+  register: wifi_radios_discovered
+  changed_when: false
+  failed_when: false
+
+- name: Set facts: existing/enable/disable lists
+  ansible.builtin.set_fact:
+    wifi_existing_radios: "{{ wifi_radios_discovered.stdout_lines }}"
+    wifi_radios_to_enable: "{{ openwrt_wifi_radios | intersect(wifi_radios_discovered.stdout_lines) }}"
+    wifi_radios_to_disable: "{{ wifi_radios_discovered.stdout_lines | difference(openwrt_wifi_radios) }}"
+
+- name: Disable unwanted WiFi radios (disabled=1)
+  when: wifi_existing_radios | length > 0
+  loop: "{{ wifi_radios_to_disable }}"
+  community.openwrt.uci:
+    command: set
+    key: "wireless.{{ item }}.disabled"
+    value: "1"
+  ignore_errors: true
+  notify: restart_network
+
+- name: Enable desired WiFi radios (disabled=0)
+  when: wifi_existing_radios | length > 0
+  loop: "{{ wifi_radios_to_enable }}"
+  community.openwrt.uci:
+    command: set
+    key: "wireless.{{ item }}.disabled"
+    value: "0"
+  ignore_errors: true
+  notify: restart_network
+
+- name: Commit wireless
+  when: wifi_existing_radios | length > 0
+  community.openwrt.uci:
+    command: commit
+    config: wireless
+  notify: restart_network

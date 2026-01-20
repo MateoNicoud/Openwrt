@@ -1,0 +1,19 @@
+---
+- name: Restart network now (expect brief disconnect)
+  ansible.builtin.meta: flush_handlers
+
+- name: Update ansible_host to new mgmt IP
+  ansible.builtin.set_fact:
+    ansible_host: "{{ openwrt_new_mgmt_ip }}"
+
+- name: Reset SSH connection to force re-authentication
+  ansible.builtin.meta: reset_connection
+
+- name: Verify SSH access with NEW rules
+  become: false
+  ansible.builtin.wait_for:
+    host: "{{ ansible_host }}"
+    port: "{{ ssh_port }}"
+    timeout: 180
+    state: started
+  connection: local

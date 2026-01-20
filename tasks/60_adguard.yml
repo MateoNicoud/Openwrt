@@ -1,0 +1,29 @@
+---
+- name: Configure AdGuard Home and disable dnsmasq port 53
+  when: enable_adguardhome | bool
+  block:
+    - name: Deploy AdGuardHome.yaml
+      ansible.builtin.template:
+        src: templates/AdGuardHome.yml.j2
+        dest: /etc/AdGuardHome.yaml
+        mode: "0600"
+      notify: restart_adguard
+
+    - name: Make dnsmasq not bind port 53
+      community.openwrt.uci:
+        command: set
+        key: "dhcp.@dnsmasq[0].port"
+        value: "0"
+      notify: restart_dnsmasq
+
+    - name: Commit dhcp after dns change
+      community.openwrt.uci:
+        command: commit
+        config: dhcp
+      notify: restart_dnsmasq
+
+    - name: Enable + start AdGuard
+      community.openwrt.service:
+        name: adguardhome
+        enabled: true
+        state: started

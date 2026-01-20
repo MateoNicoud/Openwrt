@@ -1,0 +1,81 @@
+---
+- name: Ensure br-lan is bridge with ports
+  community.openwrt.uci:
+    command: set
+    key: "network.@device[0]"
+    value:
+      name: "{{ openwrt_lan_bridge }}"
+      type: "bridge"
+      ports: "{{ openwrt_lan_ports }}"
+  notify: restart_network
+
+- name: Ensure bridge-vlan sections exist (brvlanX)
+  loop: "{{ vlans }}"
+  community.openwrt.uci:
+    command: set
+    key: "network.brvlan{{ item.id }}"
+    value:
+      device: "{{ openwrt_lan_bridge }}"
+      vlan: "{{ item.id }}"
+  notify: restart_network
+
+- name: Compute DSA ports strings for each VLAN (u* for untagged/pvid, t for tagged)
+  ansible.builtin.set_fact:
+    vlan_ports_map: "{{ vlan_ports_map | default({}) | combine({ item.id: computed_ports }) }}"
+  vars:
+    computed_ports: >-
+      {%- set out = [] -%}
+      {%- for p in openwrt_lan_ports -%}
+        {%- set cfg = port_vlan_map.get(p, {}) -%}
+        {%- set untag = cfg.get('untagged', []) -%}
+        {%- set tagged = cfg.get('tagged', []) -%}
+        {%- if item.id in untag -%}
+          {%- set _ = out.append(p ~ ':u*') -%}
+        {%- elif item.id in tagged -%}
+          {%- set _ = out.append(p ~ ':t') -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+  loop: "{{ vlans }}"
+
+- name: Apply bridge-vlan ports
+  loop: "{{ vlans }}"
+  community.openwrt.uci:
+    command: set
+    key: "network.brvlan{{ item.id }}.ports"
+    value: "{{ vlan_ports_map[item.id] }}"
+  notify: restart_network
+
+- name: Configure WAN
+  community.openwrt.uci:
+    command: set
+    key: "network.wan"
+    value:
+      device: "{{ openwrt_wan_ifname }}"
+      proto: "{{ openwrt_wan_proto }}"
+  notify: restart_network
+
+- name: Delete default network.lan (we use vlan interfaces)
+  community.openwrt.uci:
+    command: delete
+    key: "network.lan"
+  ignore_errors: true
+  notify: restart_network
+
+- name: Create VLAN interfaces (vlanX)
+  loop: "{{ vlans }}"
+  community.openwrt.uci:
+    command: set
+    key: "network.{{ uci_iface_prefix }}{{ item.id }}"
+    value:
+      proto: "static"
+      device: "{{ openwrt_lan_bridge }}.{{ item.id }}"
+      ipaddr: "{{ item.router_ip }}"
+      netmask: "{{ item.netmask }}"
+  notify: restart_network
+
+- name: Commit network
+  community.openwrt.uci:
+    command: commit
+    config: network
+  notify: restart_network

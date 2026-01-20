@@ -1,0 +1,12 @@
+bind_host: {{ adguardhome_listen_ip }}
+bind_port: {{ adguardhome_admin_port }}
+
+dns:
+  bind_hosts:
+    - 0.0.0.0
+  port: {{ adguardhome_dns_port }}
+  upstream_dns:
+{% for s in adguardhome_upstream_dns %}
+    - {{ s }}
+{% endfor %}
+  ratelimit: 20

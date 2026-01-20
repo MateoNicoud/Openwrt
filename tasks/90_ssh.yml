@@ -1,0 +1,90 @@
+---
+- name: SSH hardening (Dropbear)
+  when: enable_ssh_hardening | bool
+  block:
+    - name: Ensure dropbear is installed
+      community.openwrt.opkg:
+        name: dropbear
+        state: present
+        update_cache: true
+
+    - name: Ensure /etc/dropbear exists with strict perms
+      community.openwrt.file:
+        path: /etc/dropbear
+        state: directory
+        mode: "0700"
+
+    - name: Ensure authorized_keys file exists
+      community.openwrt.file:
+        path: /etc/dropbear/authorized_keys
+        state: touch
+        mode: "0600"
+
+    - name: Add admin SSH public keys for root (idempotent)
+      loop: "{{ ssh_authorized_keys }}"
+      community.openwrt.lineinfile:
+        path: /etc/dropbear/authorized_keys
+        line: "{{ item }}"
+        create: true
+        mode: "0600"
+
+    - name: Configure Dropbear base (port)
+      community.openwrt.uci:
+        command: set
+        key: "dropbear.@dropbear[0].Port"
+        value: "{{ ssh_port }}"
+      notify: restart_dropbear
+
+    - name: Bind Dropbear only to mgmt IP (interface)
+      when: ssh_bind_mgmt_only | bool
+      community.openwrt.uci:
+        command: set
+        key: "dropbear.@dropbear[0].Interface"
+        value: "{{ uci_iface_prefix }}2"
+      notify: restart_dropbear
+
+    - name: Bind Dropbear only to mgmt IP (listen address)
+      when: ssh_bind_mgmt_only | bool
+      community.openwrt.uci:
+        command: set
+        key: "dropbear.@dropbear[0].ListenAddress"
+        value: "{{ ssh_bind_address }}"
+      notify: restart_dropbear
+
+    - name: Set Dropbear PasswordAuth (on/off)
+      community.openwrt.uci:
+        command: set
+        key: "dropbear.@dropbear[0].PasswordAuth"
+        value: >-
+          {{
+            (ssh_password_auth | bool and vault_root_password_hash is defined)
+            | ternary('on', 'off')
+          }}
+      notify: restart_dropbear
+
+    - name: Set Dropbear RootPasswordAuth (on/off)
+      community.openwrt.uci:
+        command: set
+        key: "dropbear.@dropbear[0].RootPasswordAuth"
+        value: >-
+          {{
+            (ssh_root_password_auth | bool and vault_root_password_hash is defined)
+            | ternary('on', 'off')
+          }}
+      notify: restart_dropbear
+
+    - name: Commit dropbear
+      community.openwrt.uci:
+        command: commit
+        config: dropbear
+      notify: restart_dropbear
+
+    - name: Set root password hash (console/LuCI use, not SSH)
+      when: 
+        - vault_root_password_hash is defined
+        - enable_luci | bool
+      community.openwrt.command:
+        command: |
+          set -e
+          usermod -p '{{ vault_root_password_hash }}' root
+        uses_shell: true

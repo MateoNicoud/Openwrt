@@ -1,0 +1,41 @@
+---
+- name: Ensure backup dir exists (permissions)
+  when: enable_rollback_atd | bool
+  community.openwrt.file:
+    path: "{{ rollback_dir }}"
+    state: directory
+    mode: "0700"
+
+- name: Backup UCI configs + /etc/config snapshot
+  when: enable_rollback_atd | bool
+  community.openwrt.command:
+    command: |
+      set -e
+      TS="$(date +%F_%H%M%S)"
+      uci export network  > "{{ rollback_dir }}/network.${TS}.uci"
+      uci export firewall > "{{ rollback_dir }}/firewall.${TS}.uci"
+      uci export dhcp     > "{{ rollback_dir }}/dhcp.${TS}.uci"
+      uci export wireless > "{{ rollback_dir }}/wireless.${TS}.uci"
+      uci export dropbear > "{{ rollback_dir }}/dropbear.${TS}.uci" || true
+      uci export uhttpd   > "{{ rollback_dir }}/uhttpd.${TS}.uci"   || true
+      cp -a /etc/config "{{ rollback_dir }}/config.${TS}"
+      echo "${TS}" > "{{ rollback_dir }}/latest_ts"
+    uses_shell: true
+
+
+- name: Deploy rollback script
+  when: enable_rollback_atd | bool
+  ansible.builtin.template:
+    src: templates/rollback.sh.j2
+    dest: "{{ rollback_script_path }}"
+    mode: "0700"
+
+- name: Schedule rollback in {{ rollback_delay_minutes }} minutes (at)
+  when: enable_rollback_atd | bool
+  community.openwrt.command:
+    command: |
+      set -e
+      JOB_LINE="$(echo '{{ rollback_script_path }}' | at now + {{ rollback_delay_minutes }} minutes 2>&1 | tail -n 1)"
+      JOB_ID="$(echo "$JOB_LINE" | awk '{print $2}')"
+      echo "$JOB_ID" > "{{ rollback_dir }}/rollback_job_id"
+    uses_shell: true

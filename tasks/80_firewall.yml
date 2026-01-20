@@ -1,0 +1,198 @@
+---
+- name: Configure firewall defaults
+  community.openwrt.uci:
+    command: set
+    key: "firewall.@defaults[0]"
+    value:
+      input: "REJECT"
+      output: "ACCEPT"
+      forward: "REJECT"
+      syn_flood: "1"
+  notify: restart_firewall
+
+- name: Ensure WAN zone (masq)
+  community.openwrt.uci:
+    command: set
+    key: "firewall.wan"
+    value:
+      name: "wan"
+      network: "wan wan6"
+      input: "REJECT"
+      output: "ACCEPT"
+      forward: "REJECT"
+      masq: "1"
+      mtu_fix: "1"
+  notify: restart_firewall
+
+- name: Create VLAN zones (mgmt ACCEPT, svc/guest REJECT)
+  loop: "{{ vlans }}"
+  community.openwrt.uci:
+    command: set
+    key: "firewall.{{ item.name }}"
+    value:
+      name: "{{ item.name }}"
+      network: "{{ uci_iface_prefix }}{{ item.id }}"
+      input: "{{ item.zone.input }}"
+      output: "{{ item.zone.output }}"
+      forward: "{{ item.zone.forward }}"
+  notify: restart_firewall
+
+- name: Remove deterministic forwardings (vlan->wan)
+  loop: "{{ vlans }}"
+  community.openwrt.uci:
+    command: delete
+    key: "firewall.fwd_{{ item.name }}_wan"
+  ignore_errors: true
+  notify: restart_firewall
+
+- name: Remove deterministic rules (dns/dhcp blocks)
+  loop: "{{ vlans }}"
+  community.openwrt.uci:
+    command: delete
+    key: "firewall.allow_dhcp_{{ item.name }}"
+  ignore_errors: true
+  notify: restart_firewall
+
+- name: Remove deterministic rules (dns)
+  loop: "{{ vlans }}"
+  community.openwrt.uci:
+    command: delete
+    key: "firewall.allow_dns_{{ item.name }}"
+  ignore_errors: true
+  notify: restart_firewall
+
+- name: Create forwardings VLAN -> WAN (outbound only)
+  loop: "{{ vlans }}"
+  when: allow_outbound_to_wan[item.name] | default(false) | bool
+  community.openwrt.uci:
+    command: set
+    key: "firewall.fwd_{{ item.name }}_wan"
+    value:
+      src: "{{ item.name }}"
+      dest: "wan"
+  notify: restart_firewall
+
+- name: Allow DHCP to router for non-mgmt zones
+  loop: "{{ vlans }}"
+  when: item.name != "mgmt"
+  community.openwrt.uci:
+    command: set
+    key: "firewall.allow_dhcp_{{ item.name }}"
+    value:
+      name: "Allow-DHCP-{{ item.name }}"
+      src: "{{ item.name }}"
+      proto: "udp"
+      dest_port: "67-68"
+      target: "ACCEPT"
+  notify: restart_firewall
+
+- name: Allow DNS to router for non-mgmt zones
+  loop: "{{ vlans }}"
+  when: item.name != "mgmt"
+  community.openwrt.uci:
+    command: set
+    key: "firewall.allow_dns_{{ item.name }}"
+    value:
+      name: "Allow-DNS-{{ item.name }}"
+      src: "{{ item.name }}"
+      proto: "tcp udp"
+      dest_port: "53"
+      target: "ACCEPT"
+  notify: restart_firewall
+
+- name: Explicitly block svc -> mgmt (extra safety)
+  community.openwrt.uci:
+    command: set
+    key: "firewall.block_svc_to_mgmt"
+    value:
+      name: "Block-SVC-to-MGMT"
+      src: "svc"
+      dest: "mgmt"
+      target: "REJECT"
+  notify: restart_firewall
+
+- name: Explicitly block guest -> mgmt (extra safety)
+  community.openwrt.uci:
+    command: set
+    key: "firewall.block_guest_to_mgmt"
+    value:
+      name: "Block-GUEST-to-MGMT"
+      src: "guest"
+      dest: "mgmt"
+      target: "REJECT"
+  notify: restart_firewall
+
+- name: Remove deterministic WG zones
+  when: enable_wireguard | bool
+  loop: "{{ wg_firewall_zones }}"
+  community.openwrt.uci:
+    command: delete
+    key: "firewall.{{ item.name }}"
+  ignore_errors: true
+  notify: restart_firewall
+
+- name: Create Firewall zones for WireGuard (multi)
+  when: enable_wireguard | bool
+  loop: "{{ wg_firewall_zones }}"
+  community.openwrt.uci:
+    command: set
+    key: "firewall.{{ item.name }}"
+    value:
+      name: "{{ item.name }}"
+      input: "{{ item.input }}"
+      output: "{{ item.output }}"
+      forward: "{{ item.forward }}"
+      network: "{{ item.networks | join(' ') }}"
+  notify: restart_firewall
+
+- name: Remove deterministic WG forwardings
+  when: enable_wireguard | bool
+  loop: "{{ wg_forwardings | default([]) }}"
+  community.openwrt.uci:
+    command: delete
+    key: "firewall.fwd_{{ item.src }}_{{ item.dest }}"
+  ignore_errors: true
+  notify: restart_firewall
+
+- name: Create WG forwardings (optional)
+  when: enable_wireguard | bool
+  loop: "{{ wg_forwardings | default([]) }}"
+  community.openwrt.uci:
+    command: set
+    key: "firewall.fwd_{{ item.src }}_{{ item.dest }}"
+    value:
+      src: "{{ item.src }}"
+      dest: "{{ item.dest }}"
+  notify: restart_firewall
+
+- name: Remove deterministic WG ingress rules
+  when: enable_wireguard | bool
+  loop: "{{ wg_ingress_rules | default([]) }}"
+  community.openwrt.uci:
+    command: delete
+    key: "firewall.wg_ingress_{{ item.name | lower | regex_replace('[^a-z0-9]+','_') }}"
+  ignore_errors: true
+  notify: restart_firewall
+
+- name: Create WG ingress rules (port-only)
+  when: enable_wireguard | bool
+  loop: "{{ wg_ingress_rules | default([]) }}"
+  vars:
+    rule_key: "wg_ingress_{{ item.name | lower | regex_replace('[^a-z0-9]+','_') }}"
+  community.openwrt.uci:
+    command: set
+    key: "firewall.{{ rule_key }}"
+    value:
+      name: "{{ item.name }}"
+      src: "{{ item.src }}"
+      dest: "{{ item.dest }}"
+      proto: "{{ item.proto }}"
+      dest_port: "{{ item.dest_port }}"
+      target: "{{ item.target }}"
+  notify: restart_firewall
+
+- name: Commit firewall
+  community.openwrt.uci:
+    command: commit
+    config: firewall
+  notify: restart_firewall

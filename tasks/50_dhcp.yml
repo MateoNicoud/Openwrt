@@ -1,0 +1,54 @@
+---
+- name: Configure dnsmasq base
+  community.openwrt.uci:
+    command: set
+    key: "dhcp.@dnsmasq[0]"
+    value:
+      authoritative: "1"
+      localservice: "1"
+      rebind_protection: "1"
+  notify: restart_dnsmasq
+
+- name: Configure DHCP scopes for each VLAN
+  loop: "{{ vlans }}"
+  when: item.dhcp.enabled | bool
+  community.openwrt.uci:
+    command: set
+    key: "dhcp.vlan{{ item.id }}"
+    value:
+      interface: "{{ uci_iface_prefix }}{{ item.id }}"
+      start: "{{ item.dhcp.start }}"
+      limit: "{{ item.dhcp.limit }}"
+      leasetime: "{{ item.dhcp.leasetime }}"
+      dhcpv4: "server"
+      dhcpv6: "disabled"
+      ra: "disabled"
+      dynamicdhcp: "{{ item.dhcp.dynamicdhcp }}"
+  notify: restart_dnsmasq
+
+- name: Remove static leases (only our deterministic names)
+  when: enable_dhcp_static_leases | bool
+  loop: "{{ dhcp_static_leases }}"
+  community.openwrt.uci:
+    command: delete
+    key: "dhcp.{{ item.name }}"
+  ignore_errors: true
+  notify: restart_dnsmasq
+
+- name: Add static leases (optional)
+  when: enable_dhcp_static_leases | bool
+  loop: "{{ dhcp_static_leases }}"
+  community.openwrt.uci:
+    command: set
+    key: "dhcp.{{ item.name }}"
+    value:
+      name: "{{ item.name }}"
+      mac: "{{ item.mac }}"
+      ip: "{{ item.ip }}"
+  notify: restart_dnsmasq
+
+- name: Commit dhcp
+  community.openwrt.uci:
+    command: commit
+    config: dhcp
+  notify: restart_dnsmasq

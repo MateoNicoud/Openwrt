@@ -1,0 +1,28 @@
+#!/bin/sh
+set -e
+
+DIR="{{ rollback_dir }}"
+STAMP="$(cat "$DIR/latest_ts" 2>/dev/null || true)"
+
+if [ -z "$STAMP" ]; then
+  echo "No latest_ts found in $DIR; abort rollback."
+  exit 1
+fi
+
+echo "Rolling back using snapshot $STAMP"
+
+# restore /etc/config snapshot
+if [ -d "$DIR/config.$STAMP" ]; then
+  rm -rf /etc/config
+  cp -a "$DIR/config.$STAMP" /etc/config
+fi
+
+# reload services
+/etc/init.d/network restart || true
+/etc/init.d/firewall restart || true
+/etc/init.d/dnsmasq restart || true
+/etc/init.d/adguardhome restart || true
+/etc/init.d/dropbear restart || true
+/etc/init.d/uhttpd restart || true
+
+echo "Rollback done."

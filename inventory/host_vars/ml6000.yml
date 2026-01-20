@@ -1,0 +1,246 @@
+---
+uci_iface_prefix: "vlan"
+
+openwrt_mgmt_ip_default: "192.168.1.1"
+openwrt_new_mgmt_ip: "192.168.2.1"
+ssh_port: 22
+
+# WAN
+openwrt_wan_ifname: "eth1"
+openwrt_wan_proto: "dhcp"
+
+# Bridge LAN
+openwrt_lan_bridge: "br-lan"
+openwrt_lan_ports: ["lan1","lan2","lan3","lan4","lan5"]
+
+# VLANs (schéma unique, utilisé partout)
+vlans:
+  - id: 2
+    name: mgmt
+    router_ip: "192.168.2.1"
+    netmask: "255.255.255.0"
+    zone:
+      input: "ACCEPT"
+      output: "ACCEPT"
+      forward: "REJECT"
+    dhcp:
+      enabled: true
+      start: 100
+      limit: 150
+      leasetime: "12h"
+      dynamicdhcp: "1"
+  - id: 3
+    name: svc
+    router_ip: "192.168.3.1"
+    netmask: "255.255.255.0"
+    zone:
+      input: "REJECT"
+      output: "ACCEPT"
+      forward: "REJECT"
+    dhcp:
+      enabled: true
+      start: 100
+      limit: 150
+      leasetime: "12h"
+      dynamicdhcp: "0"
+  - id: 4
+    name: guest
+    router_ip: "192.168.4.1"
+    netmask: "255.255.255.0"
+    zone:
+      input: "REJECT"
+      output: "ACCEPT"
+      forward: "REJECT"
+    dhcp:
+      enabled: true
+      start: 100
+      limit: 150
+      leasetime: "12h"
+      dynamicdhcp: "0"
+
+# Ports / tagging (format simple: untagged + tagged)
+# Notation: untagged => VLAN "access" (PVID), tagged => trunk
+port_vlan_map:
+  lan1:
+    untagged: [2]
+    tagged: []
+  lan2:
+    untagged: [2]
+    tagged: []
+  lan3:
+    untagged: [2]
+    tagged: [3]
+  lan4:
+    untagged: [2]
+    tagged: [4]
+  lan5:
+    untagged: [2]
+    tagged: []
+
+# DHCP statiques (optionnel)
+#enable_dhcp_static_leases: false
+#dhcp_static_leases:
+#  - name: "pc-admin"
+#    mac: "AA:BB:CC:DD:EE:FF"
+#    ip: "192.168.2.10"
+#    vlan_id: 2
+#  - name: "proxmox"
+#    mac: "11:22:33:44:55:66"
+#    ip: "192.168.2.20"
+#    vlan_id: 2
+
+# WiFi
+# openwrt_wifi_radios:
+#   - radio0
+#   - radio1
+
+# Internet sortant autorisé (NAT vers WAN) - aucune exposition entrante
+allow_outbound_to_wan:
+  mgmt: true
+  svc: true
+  guest: true
+
+# DNS / AdGuard Home
+enable_adguardhome: true
+adguardhome_listen_ip: "0.0.0.0"
+adguardhome_dns_port: 53
+adguardhome_admin_port: 3000
+adguardhome_upstream_dns:
+  - "1.1.1.1"
+  - "9.9.9.9"
+
+# WireGuard
+enable_wireguard: true
+
+wg_interfaces:
+  # Admin
+  - name: "wg-admin-mgmt"
+    address: "10.10.2.1/24"
+    listen_port: 51820
+    private_key: "{{ vault_wg_admin_mgmt_private_key }}"
+    allowed_lans: ["192.168.2.0/24"]
+    firewall_zone: "vpn_admin"
+
+  - name: "wg-admin-svc"
+    address: "10.10.3.1/24"
+    listen_port: 51821
+    private_key: "{{ vault_wg_admin_svc_private_key }}"
+    allowed_lans: ["192.168.3.0/24"]
+    firewall_zone: "vpn_admin"
+
+  - name: "wg-admin-asus"
+    address: "10.10.4.1/24"
+    listen_port: 51822
+    private_key: "{{ vault_wg_admin_asus_private_key }}"
+    allowed_lans: ["192.168.4.0/24"]
+    firewall_zone: "vpn_admin"
+
+  # Ingress depuis le VPS (trafic “public” encapsulé)
+  - name: "wg-ingress"
+    address: "10.20.0.2/32"
+    listen_port: 51830
+    private_key: "{{ vault_wg_ingress_private_key }}"
+    allowed_lans: ["192.168.3.0/24", "192.168.4.0/24"]
+    firewall_zone: "vpn_ingress"
+
+# Peers
+wg_peers:
+  # Admin client (ton PC)
+  - interface: "wg-admin-mgmt"
+    name: "admin_client"
+    public_key: "{{ vault_wg_peer_admin_public_key }}"
+    allowed_ips: ["10.10.2.2/32"]
+
+  - interface: "wg-admin-svc"
+    name: "admin_client"
+    public_key: "{{ vault_wg_peer_admin_public_key }}"
+    allowed_ips: ["10.10.3.2/32"]
+
+  - interface: "wg-admin-asus"
+    name: "admin_client"
+    public_key: "{{ vault_wg_peer_admin_public_key }}"
+    allowed_ips: ["10.10.4.2/32"]
+
+  # VPS hub (OpenWrt initie vers le VPS)
+  - interface: "wg-ingress"
+    name: "vps_hub"
+    public_key: "{{ vault_wg_peer_vps_public_key }}"
+    # AllowedIPs côté OpenWrt: IP WG du VPS dans le tunnel.
+    # Le VPS, lui, aura AllowedIPs vers 192.168.3.0/24 et 192.168.4.0/24 pour router vers chez toi.
+    allowed_ips: ["10.20.0.1/32"]
+    endpoint_host: "{{ vps_public_ip }}"
+    endpoint_port: 51830
+    persistent_keepalive: 25
+
+# WireGuard firewall zones gérées par le playbook
+wg_firewall_zones:
+  - name: "vpn_admin"
+    input: "ACCEPT"
+    output: "ACCEPT"
+    forward: "ACCEPT"
+    networks: ["wg-admin-mgmt", "wg-admin-svc", "wg-admin-asus"]
+
+  - name: "vpn_ingress"
+    input: "REJECT"
+    output: "ACCEPT"
+    forward: "REJECT"
+    networks: ["wg-ingress"]
+
+# Forwardings optionnels (admin only)
+wg_forwardings:
+  - src: "vpn_admin"
+    dest: "mgmt"
+  - src: "vpn_admin"
+    dest: "svc"
+  - src: "vpn_admin"
+    dest: "guest"
+
+# Règles ingress (port-only)
+wg_ingress_rules:
+  - name: "Allow-HTTPS-to-app-public"
+    src: "vpn_ingress"
+    dest: "svc"
+    proto: "tcp"
+    dest_port: "443"
+    target: "ACCEPT"
+
+  - name: "Allow-Minecraft"
+    src: "vpn_ingress"
+    dest: "guest"
+    proto: "tcp"
+    dest_port: "25565"
+    target: "ACCEPT"
+
+# LuCI/uhttpd hardening
+enable_luci: false
+enable_luci_hardening: true
+luci_https_only: true
+luci_redirect_http_to_https: true
+luci_https_port: 443
+luci_http_port: 80
+# Bind uniquement sur mgmt
+luci_bind_ip: "192.168.2.1"
+
+# Rollback safety
+enable_rollback_atd: true
+rollback_delay_minutes: 3
+rollback_dir: "/root/ansible-backup"
+rollback_script_path: "/root/rollback.sh"
+
+# SSH hardening (Dropbear)
+enable_ssh_hardening: true
+
+ssh_password_auth: false
+ssh_root_password_auth: false
+
+# Bind dropbear seulement sur mgmt
+ssh_bind_mgmt_only: true
+ssh_bind_address: "192.168.2.1"
+ssh_port: 22
+
+# Password root : défini via hash (vault), mais SSH password désactivé
+set_root_password: true
+
+# Clés autorisées pour root
+ssh_authorized_keys:
+  - "{{ vault_admin_ssh_pubkey }}"

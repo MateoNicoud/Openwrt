@@ -1,0 +1,60 @@
+---
+- name: Configure OpenWrt (VLANs, trunk, AdGuard, WireGuard, LuCI hardening) with rollback safety
+  hosts: openwrt
+  pre_tasks:
+    - name: Probe SSH on NEW mgmt IP
+      ansible.builtin.wait_for:
+        host: "{{ openwrt_new_mgmt_ip }}"
+        port: "{{ ssh_port }}"
+        timeout: 2
+        state: started
+      delegate_to: localhost
+      connection: local
+      register: probe_new
+      failed_when: false
+      changed_when: false
+
+    - name: Select ansible_host
+      ansible.builtin.set_fact:
+        ansible_host: >-
+          {{ (probe_new is succeeded) | ternary(openwrt_new_mgmt_ip, openwrt_mgmt_ip_default) }}
+
+    - name: Reset SSH connection to use selected ansible_host
+      ansible.builtin.meta: reset_connection
+
+  tasks:
+    - name: Import packages tasks
+      ansible.builtin.import_tasks: tasks/00_packages.yml
+
+    - name: Import rollback setup tasks
+      ansible.builtin.import_tasks: tasks/10_rollback.yml
+
+    - name: Import WiFi tasks
+      ansible.builtin.import_tasks: tasks/20_wifi.yml
+
+    - name: Import network tasks
+      ansible.builtin.import_tasks: tasks/30_network.yml
+
+    - name: Import DHCP tasks
+      ansible.builtin.import_tasks: tasks/50_dhcp.yml
+
+    - name: Import AdGuard Home tasks
+      ansible.builtin.import_tasks: tasks/60_adguard.yml
+
+    - name: Import WireGuard tasks
+      ansible.builtin.import_tasks: tasks/70_wireguard.yml
+
+    - name: Import firewall tasks
+      ansible.builtin.import_tasks: tasks/80_firewall.yml
+
+    - name: Import SSH hardening tasks
+      ansible.builtin.import_tasks: tasks/90_ssh.yml
+
+    - name: Import LuCI/uhttpd tasks
+      ansible.builtin.import_tasks: tasks/95_luci.yml
+
+    - name: Import reconnection tasks
+      ansible.builtin.import_tasks: tasks/98_reconnect.yml
+
+    - name: Import Finalize tasks
+      ansible.builtin.import_tasks: tasks/99_finalize.yml

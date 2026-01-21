@@ -1,6 +1,8 @@
 ---
 - name: Configure OpenWrt (VLANs, trunk, AdGuard, WireGuard, LuCI hardening) with rollback safety
   hosts: openwrt
+  vars_files:
+    - vars/secrets.yml
   pre_tasks:
     - name: Probe SSH on NEW mgmt IP
       ansible.builtin.wait_for:

@@ -66,21 +66,9 @@ run: venv vendor ## Run playbook (no tags)
 	$(ANSIBLE) -i "$(INVENTORY)" "$(PLAYBOOK)"
 
 run-mitogen: venv vendor ## Run playbook using mitogen (if installed in .venv)
-	@MITOGEN_STRATEGY_PLUGINS="$$( \
-		$(PY) - <<-'PY'
-		import os, sys
-		try:
-		    import mitogen
-		except Exception:
-		    sys.stderr.write("mitogen not installed in .venv (add it to requirements_python.txt)\n")
-		    sys.exit(2)
-		p = os.path.join(os.path.dirname(mitogen.__file__), "ansible_mitogen", "plugins", "strategy")
-		print(p)
-		PY
-	)"; \
+	ANSIBLE_STRATEGY_PLUGINS="$(VENV_DIR)/lib/python*/site-packages/mitogen/ansible_mitogen/plugins/strategy" \
 	ANSIBLE_CONFIG=ansible.cfg \
 	ANSIBLE_STRATEGY=mitogen_linear \
-	ANSIBLE_STRATEGY_PLUGINS="$$MITOGEN_STRATEGY_PLUGINS" \
 	ANSIBLE_ROLES_PATH="$(ROLES_PATH):roles" \
 	ANSIBLE_COLLECTIONS_PATHS="$(COLLECTIONS_PATH):collections" \
 	$(ANSIBLE) -i "$(INVENTORY)" "$(PLAYBOOK)"

@@ -67,9 +67,12 @@ vendor: venv ## Install roles/collections into .vendor
 run: venv vendor ## Run playbook (no tags)
 	@$(ANSIBLE_ENV) $(ANSIBLE) -i "$(INVENTORY)" "$(PLAYBOOK)"
 
-run-mitogen: venv vendor ## Run playbook using mitogen
-	@STRATEGY_DIR=$$(echo $(VENV_DIR)/lib/python*/site-packages/mitogen/ansible_mitogen/plugins/strategy); \
-	ANSIBLE_STRATEGY_PLUGINS="$$STRATEGY_DIR" \
+run-mitogen: venv deps-python vendor ## Run playbook using mitogen (if installed in .venv)
+	@set -euo pipefail; \
+	PYVER=$$($(PY) -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")'); \
+	STRAT_DIR="$(VENV_DIR)/lib/$$PYVER/site-packages/ansible_mitogen/plugins/strategy"; \
+	test -d "$$STRAT_DIR" || (echo "Mitogen strategy dir not found: $$STRAT_DIR"; exit 1); \
+	ANSIBLE_STRATEGY_PLUGINS="$$STRAT_DIR" \
 	ANSIBLE_STRATEGY=mitogen_linear \
 	$(ANSIBLE_ENV) \
 	$(ANSIBLE) -i "$(INVENTORY)" "$(PLAYBOOK)"

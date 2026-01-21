@@ -5,25 +5,46 @@
   vars_files:
     - vars/secrets.yml
   pre_tasks:
-    - name: Probe SSH on NEW mgmt IP
+    - name: Probe SSH on default mgmt IP
+      ansible.builtin.wait_for:
+        host: "{{ openwrt_mgmt_ip_default }}"
+        port: "{{ ssh_port }}"
+        state: started
+        connect_timeout: 1
+        timeout: 2
+      delegate_to: localhost
+      connection: local
+      register: probe_old
+      ignore_errors: true
+      changed_when: false
+
+    - name: Probe SSH on new mgmt IP
       ansible.builtin.wait_for:
         host: "{{ openwrt_new_mgmt_ip }}"
         port: "{{ ssh_port }}"
-        timeout: 2
         state: started
+        connect_timeout: 1
+        timeout: 2
       delegate_to: localhost
       connection: local
       register: probe_new
-      failed_when: false
+      ignore_errors: true
       changed_when: false
 
-    - name: Select ansible_host
+    - name: Pick reachable mgmt IP (prefer NEW)
       ansible.builtin.set_fact:
-        ansible_host: >-
-          {{ (probe_new is succeeded) | ternary(openwrt_new_mgmt_ip, openwrt_mgmt_ip_default) }}
+        _mgmt_ip_selected: >-
+          {{ (not probe_new.failed) | ternary(openwrt_new_mgmt_ip,
+              (not probe_old.failed) | ternary(openwrt_mgmt_ip_default, openwrt_new_mgmt_ip)) }}
 
-    - name: Reset SSH connection to use selected ansible_host
+    - name: Switch current host to selected mgmt IP
+      ansible.builtin.set_fact:
+        ansible_host: "{{ _mgmt_ip_selected }}"
+
+    - name: Reset SSH connection after selecting IP
       ansible.builtin.meta: reset_connection
+      when: ansible_host != _mgmt_ip_selected
+
 
   tasks:
     - name: Import packages tasks

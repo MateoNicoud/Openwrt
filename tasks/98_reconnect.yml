@@ -16,4 +16,5 @@
     port: "{{ ssh_port }}"
     timeout: 180
     state: started
+    delegate_to: localhost
   connection: local

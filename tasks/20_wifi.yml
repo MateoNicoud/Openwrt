@@ -19,7 +19,7 @@
   changed_when: false
   failed_when: false
 
-- name: Set facts: existing/enable/disable lists
+- name: "Set facts: existing/enable/disable lists"
   ansible.builtin.set_fact:
     wifi_existing_radios: "{{ wifi_radios_discovered.stdout_lines }}"
     wifi_radios_to_enable: "{{ openwrt_wifi_radios | intersect(wifi_radios_discovered.stdout_lines) }}"

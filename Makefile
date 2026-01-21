@@ -1,5 +1,6 @@
 SHELL := /bin/bash
 .ONESHELL:
+.SHELLFLAGS := -eu -o pipefail -c
 
 .DEFAULT_GOAL := help
 
@@ -22,6 +23,12 @@ PY      := $(VENV_DIR)/bin/python
 ANSIBLE := $(VENV_DIR)/bin/ansible-playbook
 GALAXY  := $(VENV_DIR)/bin/ansible-galaxy
 
+ANSIBLE_ENV := \
+	ANSIBLE_CONFIG=ansible.cfg \
+	ANSIBLE_ROLES_PATH="$(ROLES_PATH):roles" \
+	ANSIBLE_COLLECTIONS_PATH="$(COLLECTIONS_PATH)" \
+	ANSIBLE_COLLECTIONS_PATHS="$(COLLECTIONS_PATH):collections"
+
 .PHONY: help setup clean venv deps-python vendor run run-mitogen check-uv check-files
 
 help: ## Show this help
@@ -30,7 +37,7 @@ help: ## Show this help
 		/^[a-zA-Z0-9_.-]+:.*##/ { printf "  %-18s %s\n", $$1, $$2 } \
 	' $(MAKEFILE_LIST)
 
-setup: check-uv check-files venv deps-python vendor ## Create .venv (uv, Python 3.14) + install python deps + vendor ansible deps into .vendor
+setup: check-uv check-files venv deps-python vendor ## Create venv + install deps + vendor ansible deps
 
 check-uv: ## Check that uv is installed
 	@command -v $(UV) >/dev/null 2>&1 || (echo "uv not found. Install uv first."; exit 1)
@@ -45,34 +52,27 @@ venv: check-uv ## Create .venv only
 	fi
 	@test -x "$(PY)" || (echo "Missing venv python at $(PY)"; exit 1)
 	@$(PY) -V >/dev/null
-	@# Valid uv check: uv pip requires a subcommand, so use list
 	@$(UV) pip list -p "$(PY)" >/dev/null
 
-
-deps-python: venv ## Install python deps from requirements_python.txt into .venv
+deps-python: venv ## Install python deps into .venv
 	@$(UV) pip install -p "$(PY)" -r "$(REQUIREMENTS_PYTHON)"
 
-vendor: venv ## Install roles/collections from requirements_ansible.yml into .vendor
+vendor: venv ## Install roles/collections into .vendor
 	@mkdir -p "$(ROLES_PATH)" "$(COLLECTIONS_PATH)"
-	@# Install roles (ignore if file has no roles section)
-	@$(GALAXY) role install -r "$(REQUIREMENTS_ANSIBLE)" -p "$(ROLES_PATH)" --force || true
-	@# Install collections (ignore if file has no collections section)
-	@$(GALAXY) collection install -r "$(REQUIREMENTS_ANSIBLE)" -p "$(COLLECTIONS_PATH)" --force || true
+	@# Roles (ignore if file has no roles section)
+	@$(ANSIBLE_ENV) $(GALAXY) role install -r "$(REQUIREMENTS_ANSIBLE)" -p "$(ROLES_PATH)" --force || true
+	@# Collections (ignore if file has no collections section)
+	@$(ANSIBLE_ENV) $(GALAXY) collection install -r "$(REQUIREMENTS_ANSIBLE)" -p "$(COLLECTIONS_PATH)" --force || true
 
 run: venv vendor ## Run playbook (no tags)
-	@ANSIBLE_CONFIG=ansible.cfg \
-	ANSIBLE_ROLES_PATH="$(ROLES_PATH):roles" \
-	ANSIBLE_COLLECTIONS_PATHS="$(COLLECTIONS_PATH):collections" \
-	$(ANSIBLE) -i "$(INVENTORY)" "$(PLAYBOOK)"
+	@$(ANSIBLE_ENV) $(ANSIBLE) -i "$(INVENTORY)" "$(PLAYBOOK)"
 
-run-mitogen: venv vendor ## Run playbook using mitogen (if installed in .venv)
-	ANSIBLE_STRATEGY_PLUGINS="$(VENV_DIR)/lib/python*/site-packages/mitogen/ansible_mitogen/plugins/strategy" \
-	ANSIBLE_CONFIG=ansible.cfg \
+run-mitogen: venv vendor ## Run playbook using mitogen
+	@STRATEGY_DIR=$$(echo $(VENV_DIR)/lib/python*/site-packages/mitogen/ansible_mitogen/plugins/strategy); \
+	ANSIBLE_STRATEGY_PLUGINS="$$STRATEGY_DIR" \
 	ANSIBLE_STRATEGY=mitogen_linear \
-	ANSIBLE_ROLES_PATH="$(ROLES_PATH):roles" \
-	ANSIBLE_COLLECTIONS_PATHS="$(COLLECTIONS_PATH):collections" \
+	$(ANSIBLE_ENV) \
 	$(ANSIBLE) -i "$(INVENTORY)" "$(PLAYBOOK)"
-
 
 clean: ## Remove .venv and .vendor
 	@rm -rf "$(VENV_DIR)" "$(VENDOR_DIR)"

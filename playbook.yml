@@ -18,33 +18,21 @@
       ignore_errors: true
       changed_when: false
 
-    - name: Probe SSH on new mgmt IP
+    - name: Switch ansible_host to NEW if default is unreachable
+      ansible.builtin.set_fact:
+        ansible_host: "{{ openwrt_new_mgmt_ip }}"
+      when: probe_old.failed
+
+    - name: Probe SSH on new mgmt IP (only if switched)
       ansible.builtin.wait_for:
         host: "{{ openwrt_new_mgmt_ip }}"
         port: "{{ ssh_port }}"
         state: started
         connect_timeout: 1
-        timeout: 2
+        timeout: 20
       delegate_to: localhost
       connection: local
-      register: probe_new
-      ignore_errors: true
-      changed_when: false
-
-    - name: Pick reachable mgmt IP (prefer NEW)
-      ansible.builtin.set_fact:
-        _mgmt_ip_selected: >-
-          {{ (not probe_new.failed) | ternary(openwrt_new_mgmt_ip,
-              (not probe_old.failed) | ternary(openwrt_mgmt_ip_default, openwrt_new_mgmt_ip)) }}
-
-    - name: Switch current host to selected mgmt IP
-      ansible.builtin.set_fact:
-        ansible_host: "{{ _mgmt_ip_selected }}"
-
-    - name: Reset SSH connection after selecting IP
-      ansible.builtin.meta: reset_connection
-      when: ansible_host != _mgmt_ip_selected
-
+      when: probe_old.failed
 
   tasks:
     - name: Import packages tasks

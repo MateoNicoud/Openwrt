@@ -6,15 +6,18 @@
   ansible.builtin.set_fact:
     ansible_host: "{{ openwrt_new_mgmt_ip }}"
 
-- name: Reset SSH connection to force re-authentication
-  ansible.builtin.meta: reset_connection
+- name: Restart network to drop current SSH session (OpenWrt)
+  community.openwrt.service:
+    name: network
+    state: restarted
+  ignore_errors: true
+  changed_when: true
 
 - name: Verify SSH access with NEW rules
-  become: false
   ansible.builtin.wait_for:
     host: "{{ ansible_host }}"
     port: "{{ ssh_port }}"
     timeout: 180
     state: started
-    delegate_to: localhost
+  delegate_to: localhost
   connection: local

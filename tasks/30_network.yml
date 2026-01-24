@@ -12,6 +12,14 @@
 - name: Ensure bridge-vlan sections exist (brvlanX)
   loop: "{{ vlans }}"
   community.openwrt.uci:
+    command: add
+    config: network
+    type: bridge-vlan
+    name: "brvlan{{ item.id }}"
+
+- name: Set bridge-vlan device/vlan
+  loop: "{{ vlans }}"
+  community.openwrt.uci:
     command: set
     key: "network.brvlan{{ item.id }}"
     value:

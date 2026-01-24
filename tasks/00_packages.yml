@@ -31,7 +31,8 @@
 - name: Install WireGuard packages
   when: enable_wireguard | bool
   community.openwrt.opkg:
-    name:
+    name: "{{ item }}"
+    state: present
+  loop:
       - wireguard-tools
       - kmod-wireguard
-    state: present

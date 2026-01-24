@@ -33,7 +33,7 @@
     key: "firewall.wan"
     value:
       name: "wan"
-      network: "wan wan6"
+      network: "wan"
       input: "REJECT"
       output: "ACCEPT"
       forward: "REJECT"

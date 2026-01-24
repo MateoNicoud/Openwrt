@@ -1,8 +1,8 @@
 ---
-- name: Ensure br-lan device section is a bridge
+- name: Ensure br-lan is bridge with ports
   community.openwrt.uci:
     command: set
-    key: "network.br_lan_dev"
+    key: "network.@device[0]"
     value:
       name: "{{ openwrt_lan_bridge }}"
       type: "bridge"

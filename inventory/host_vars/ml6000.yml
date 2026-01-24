@@ -10,6 +10,7 @@ base_packages:
   - dnsmasq
   - firewall4
   - kmod
+  - python3
 # WAN
 openwrt_wan_ifname: "eth1"
 openwrt_wan_proto: "dhcp"

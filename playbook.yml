@@ -69,3 +69,29 @@
 
     - name: Import Finalize tasks
       ansible.builtin.import_tasks: tasks/99_finalize.yml
+
+  handlers:
+    - name: restart_network
+      community.openwrt.service:
+        name: network
+        state: restarted
+
+    - name: restart_firewall
+      community.openwrt.service:
+        name: firewall
+        state: restarted
+
+    - name: restart_dnsmasq
+      community.openwrt.service:
+        name: dnsmasq
+        state: restarted
+
+    - name: restart_adguard
+      community.openwrt.service:
+        name: adguardhome
+        state: restarted
+
+    - name: restart_uhttpd
+      community.openwrt.service:
+        name: uhttpd
+        state: restarted

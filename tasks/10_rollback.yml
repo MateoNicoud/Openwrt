@@ -1,4 +1,18 @@
 ---
+- name: Ensure rollback prerequisites are installed (at)
+  when: enable_rollback_atd | bool
+  community.openwrt.opkg:
+    name:
+      - at
+    state: present
+
+- name: Ensure atd is enabled and running
+  when: enable_rollback_atd | bool
+  ansible.builtin.raw: |
+    /etc/init.d/atd enable >/dev/null 2>&1 || true
+    /etc/init.d/atd start  >/dev/null 2>&1 || /etc/init.d/atd restart >/dev/null 2>&1 || true
+  changed_when: false
+
 - name: Ensure backup dir exists (permissions)
   when: enable_rollback_atd | bool
   community.openwrt.file:
@@ -6,22 +20,42 @@
     state: directory
     mode: "0700"
 
+- name: Cancel previous rollback job if exists
+  when: enable_rollback_atd | bool
+  ansible.builtin.shell: |
+    set -e
+    if [ -f "{{ rollback_dir }}/rollback_job_id" ]; then
+      old="$(cat "{{ rollback_dir }}/rollback_job_id" 2>/dev/null || true)"
+      if [ -n "$old" ]; then
+        atrm "$old" 2>/dev/null || true
+      fi
+      rm -f "{{ rollback_dir }}/rollback_job_id"
+    fi
+  args:
+    executable: /bin/sh
+  changed_when: false
+
 - name: Backup UCI configs + /etc/config snapshot
   when: enable_rollback_atd | bool
   ansible.builtin.shell: |
     set -e
     TS="$(date +%F_%H%M%S)"
+    umask 077
+
     uci export network  > "{{ rollback_dir }}/network.${TS}.uci"
     uci export firewall > "{{ rollback_dir }}/firewall.${TS}.uci"
     uci export dhcp     > "{{ rollback_dir }}/dhcp.${TS}.uci"
     uci export wireless > "{{ rollback_dir }}/wireless.${TS}.uci"
+
     uci export dropbear > "{{ rollback_dir }}/dropbear.${TS}.uci" || true
     uci export uhttpd   > "{{ rollback_dir }}/uhttpd.${TS}.uci"   || true
+
     cp -a /etc/config "{{ rollback_dir }}/config.${TS}"
+
     echo "${TS}" > "{{ rollback_dir }}/latest_ts"
   args:
     executable: /bin/sh
-
+  changed_when: true
 
 - name: Deploy rollback script
   when: enable_rollback_atd | bool
@@ -34,9 +68,20 @@
   when: enable_rollback_atd | bool
   ansible.builtin.shell: |
     set -e
-    JOB_LINE="$(echo '{{ rollback_script_path }}' | at now + {{ rollback_delay_minutes }} minutes 2>&1 | tail -n 1)"
-    JOB_ID="$(echo "$JOB_LINE" | awk '{print $2}')"
+
+    atq >/dev/null 2>&1 || true
+
+    out="$(printf '%s\n' '{{ rollback_script_path }}' | at now + {{ rollback_delay_minutes }} minutes 2>&1)"
+    JOB_ID="$(printf '%s\n' "$out" | awk '/^job[[:space:]]+[0-9]+/ {print $2; exit}')"
+
+    if [ -z "$JOB_ID" ]; then
+      echo "Failed to schedule at job. Output was:"
+      echo "$out"
+      exit 1
+    fi
+
     echo "$JOB_ID" > "{{ rollback_dir }}/rollback_job_id"
+    echo "armed" > "{{ rollback_dir }}/rollback_armed"
   args:
     executable: /bin/sh
-
+  changed_when: true

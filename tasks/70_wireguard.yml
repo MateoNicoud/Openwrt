@@ -1,4 +1,16 @@
-- name: Configure WireGuard interfaces
+- name: Ensure WireGuard interface sections exist
+  when: enable_wireguard | bool
+  loop: "{{ wg_interfaces }}"
+  loop_control:
+    label: "{{ item.name }}"
+  community.openwrt.uci:
+    command: section
+    config: network
+    type: interface
+    name: "{{ item.name }}"
+  notify: restart_network
+
+- name: Configure WireGuard interface options
   when: enable_wireguard | bool
   loop: "{{ wg_interfaces }}"
   loop_control:
@@ -7,14 +19,35 @@
     command: set
     key: "network.{{ item.name }}"
     value:
-      .type: "interface"
       proto: "wireguard"
-      private_key: "{{ item.private_key }}"
       listen_port: "{{ item.listen_port | string }}"
       addresses:
         - "{{ item.address }}"
   notify: restart_network
 
+- name: Ensure WireGuard backend sections exist
+  when: enable_wireguard | bool
+  loop: "{{ wg_interfaces }}"
+  loop_control:
+    label: "wg_{{ item.name }}"
+  community.openwrt.uci:
+    command: section
+    config: network
+    type: "wireguard_{{ item.name }}"
+    name: "wg_{{ item.name }}"
+  notify: restart_network
+
+- name: Configure WireGuard private keys
+  when: enable_wireguard | bool
+  loop: "{{ wg_interfaces }}"
+  loop_control:
+    label: "wg_{{ item.name }}"
+  community.openwrt.uci:
+    command: set
+    key: "network.wg_{{ item.name }}"
+    value:
+      private_key: "{{ item.private_key }}"
+  notify: restart_network
 
 - name: Remove managed WG peers
   when: enable_wireguard | bool

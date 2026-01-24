@@ -173,8 +173,8 @@ wg_peers:
     # AllowedIPs côté OpenWrt: IP WG du VPS dans le tunnel.
     # Le VPS, lui, aura AllowedIPs vers 192.168.3.0/24 et 192.168.4.0/24 pour router vers chez toi.
     allowed_ips: ["10.20.0.1/32"]
-    endpoint_host: "{{ vps_public_ip }}"
-    endpoint_port: 51830
+    # endpoint_host: "{{ vps_public_ip }}"
+    # endpoint_port: 51830
     persistent_keepalive: 25
 
 # WireGuard firewall zones gérées par le playbook

@@ -64,8 +64,8 @@ vendor: venv ## Install roles/collections into .vendor
 	@# Collections (ignore if file has no collections section)
 	@$(ANSIBLE_ENV) $(GALAXY) collection install -r "$(REQUIREMENTS_ANSIBLE)" -p "$(COLLECTIONS_PATH)" --force || true
 
-run: venv vendor ## Run playbook (no tags)
-	@$(ANSIBLE_ENV) $(ANSIBLE) -i "$(INVENTORY)" "$(PLAYBOOK)"
+run: ## Run playbook (no tags)
+	@$(ANSIBLE_ENV) $(ANSIBLE) -i "$(INVENTORY)" "$(PLAYBOOK)" --ask-vault-pass
 
 clean: ## Remove .venv and .vendor
 	@rm -rf "$(VENV_DIR)" "$(VENDOR_DIR)"

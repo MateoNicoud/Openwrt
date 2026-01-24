@@ -15,7 +15,7 @@
     name: at
     state: latest
 
-- name: "Enable atd
+- name: "Enable atd"
   when: enable_rollback_atd | bool
   community.openwrt.service:
     name: atd

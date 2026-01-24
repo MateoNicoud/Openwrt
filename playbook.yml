@@ -71,14 +71,19 @@
       ansible.builtin.import_tasks: tasks/99_finalize.yml
 
   handlers:
-    - name: restart_network
+    - name: restart_uhttpd
       community.openwrt.service:
-        name: network
+        name: uhttpd
         state: restarted
 
-    - name: restart_firewall
+    - name: restart_adguard
       community.openwrt.service:
-        name: firewall
+        name: adguardhome
+        state: restarted
+
+    - name: restart_dropbear
+      community.openwrt.service:
+        name: dropbear
         state: restarted
 
     - name: restart_dnsmasq
@@ -86,17 +91,12 @@
         name: dnsmasq
         state: restarted
 
-    - name: restart_adguard
+    - name: restart_firewall
       community.openwrt.service:
-        name: adguardhome
-        state: restarted
-  
-    - name: restart_dropbear
-      community.openwrt.service:
-        name: dropbear
+        name: firewall
         state: restarted
 
-    - name: restart_uhttpd
+    - name: restart_network
       community.openwrt.service:
-        name: uhttpd
+        name: network
         state: restarted

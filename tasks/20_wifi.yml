@@ -1,14 +1,5 @@
----
-- name: Assert openwrt_wifi_radios is defined
-  ansible.builtin.assert:
-    that:
-      - openwrt_wifi_radios is defined
-      - openwrt_wifi_radios is iterable
-    fail_msg: "Define openwrt_wifi_radios (list) in host_vars/group_vars, e.g. [] or [radio0]."
-    quiet: true
-
 - name: Discover existing WiFi radios (radio*)
-  ansible.builtin.shell: |      
+  ansible.builtin.shell: |
     set -e
     uci show wireless 2>/dev/null \
       | sed -n "s/^wireless\.\(radio[0-9]\+\)\..*/\1/p" \
@@ -19,11 +10,12 @@
   changed_when: false
   failed_when: false
 
-- name: "Set facts - existing/enable/disable lists"
+- name: Set facts - existing/enable/disable lists
   ansible.builtin.set_fact:
-    wifi_existing_radios: "{{ wifi_radios_discovered.stdout_lines }}"
-    wifi_radios_to_enable: "{{ openwrt_wifi_radios | intersect(wifi_radios_discovered.stdout_lines) }}"
-    wifi_radios_to_disable: "{{ wifi_radios_discovered.stdout_lines | difference(openwrt_wifi_radios) }}"
+    wifi_existing_radios: "{{ wifi_radios_discovered.stdout_lines | default([]) }}"
+    wifi_requested_radios: "{{ openwrt_wifi_radios | default([]) }}"
+    wifi_radios_to_enable: "{{ (openwrt_wifi_radios | default([])) | intersect(wifi_radios_discovered.stdout_lines | default([])) }}"
+    wifi_radios_to_disable: "{{ (wifi_radios_discovered.stdout_lines | default([])) | difference(openwrt_wifi_radios | default([])) }}"
 
 - name: Disable unwanted WiFi radios (disabled=1)
   when: wifi_existing_radios | length > 0

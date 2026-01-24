@@ -7,7 +7,7 @@
   pre_tasks:
     - name: Probe SSH on default mgmt IP
       ansible.builtin.wait_for:
-        host: "{{ openwrt_mgmt_ip_default }}"
+        host: "{{ openwrt_old_mgmt_ip }}"
         port: "{{ ssh_port }}"
         state: started
         connect_timeout: 1

@@ -1,4 +1,18 @@
 ---
+- name: Remove temporary mgmt alias interface (cleanup)
+  when: enable_mgmt_alias_migration | bool
+  community.openwrt.uci:
+    command: delete
+    key: "network.{{ mgmt_alias_section_name }}"
+  ignore_errors: true
+  notify: restart_network
+
+- name: Commit network (after alias removal)
+  when: enable_mgmt_alias_migration | bool
+  community.openwrt.uci:
+    command: commit
+    config: network
+  notify: restart_network
 
 - name: Confirm success - cancel scheduled rollback job (atrm)
   when: enable_rollback_atd | bool

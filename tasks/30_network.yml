@@ -98,6 +98,27 @@
   loop: "{{ vlans }}"
   notify: restart_network
 
+- name: Create temporary mgmt alias interface (keep old subnet during migration)
+  when: enable_mgmt_alias_migration | bool
+  community.openwrt.uci:
+    command: section
+    config: network
+    type: interface
+    name: "{{ mgmt_alias_section_name }}"
+  notify: restart_network
+
+- name: Configure temporary mgmt alias (old IP on br-lan.2)
+  when: enable_mgmt_alias_migration | bool
+  community.openwrt.uci:
+    command: set
+    key: "network.{{ mgmt_alias_section_name }}"
+    value:
+      proto: "static"
+      device: "{{ openwrt_lan_bridge }}.2"
+      ipaddr: "{{ openwrt_old_mgmt_ip }}"
+      netmask: "{{ openwrt_old_mgmt_netmask }}"
+  notify: restart_network
+
 - name: Commit network
   community.openwrt.uci:
     command: commit

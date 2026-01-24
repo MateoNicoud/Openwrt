@@ -1,8 +1,13 @@
 ---
 uci_iface_prefix: "vlan"
 
-openwrt_mgmt_ip_default: "192.168.1.1"
 openwrt_new_mgmt_ip: "192.168.2.1"
+
+openwrt_old_mgmt_ip: "192.168.1.1"
+openwrt_old_mgmt_netmask: "255.255.255.0"
+enable_mgmt_alias_migration: true
+mgmt_alias_section_name: "mgmt_alias_old"
+
 ssh_port: 22
 
 base_packages:

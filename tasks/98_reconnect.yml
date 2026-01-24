@@ -1,52 +1,21 @@
 ---
-
-- name: Restart network now (expect brief disconnect)
-  ansible.builtin.meta: flush_handlers
-
-- name: Update ansible_host to new mgmt IP
-  ansible.builtin.set_fact:
-    ansible_host: "{{ openwrt_new_mgmt_ip }}"
-
-- name: Detect if running under WSL
-  ansible.builtin.shell: "grep -qi microsoft /proc/version"
-  register: is_wsl
-  changed_when: false
-  failed_when: false
-  delegate_to: localhost
-  connection: local
-
-# ---------- WSL : restart Windows NIC ----------
-- name: Restart Windows network adapter (WSL)
-  when: is_wsl.rc == 0
-  delegate_to: localhost
-  connection: local
-  ansible.builtin.shell: |
-    powershell.exe -NoProfile -Command "
-      $a = Get-NetAdapter |
-           Where-Object { $_.Status -eq 'Up' -and $_.Name -match 'Ethernet|Wi-Fi' } |
-           Select-Object -First 1;
-      if ($a) {
-        Disable-NetAdapter -Name $a.Name -Confirm:\$false;
-        Start-Sleep -Seconds 3;
-        Enable-NetAdapter -Name $a.Name -Confirm:\$false
-      }
-    "
+- name: Restart network in background (router will come back with old+new IP)
+  ansible.builtin.shell: "/etc/init.d/network restart >/dev/null 2>&1 &"
+  async: 1
+  poll: 0
   changed_when: true
   failed_when: false
 
-# ---------- Ubuntu : restart NetworkManager ----------
-- name: Restart NetworkManager (Ubuntu native)
-  when: is_wsl.rc != 0
+- name: Wait for SSH on OLD mgmt IP (still available via alias)
+  ansible.builtin.wait_for:
+    host: "{{ openwrt_mgmt_ip_default }}"
+    port: "{{ ssh_port }}"
+    timeout: 240
+    state: started
   delegate_to: localhost
   connection: local
-  become: true
-  ansible.builtin.shell: |
-    systemctl restart NetworkManager
-  changed_when: true
-  failed_when: false
 
-# ---------- Wait for router on new IP ----------
-- name: Wait for OpenWrt SSH on new mgmt IP
+- name: Wait for SSH on NEW mgmt IP (validation)
   ansible.builtin.wait_for:
     host: "{{ openwrt_new_mgmt_ip }}"
     port: "{{ ssh_port }}"
@@ -54,3 +23,7 @@
     state: started
   delegate_to: localhost
   connection: local
+
+- name: Switch ansible_host to NEW mgmt IP (after it is reachable)
+  ansible.builtin.set_fact:
+    ansible_host: "{{ openwrt_new_mgmt_ip }}"

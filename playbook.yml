@@ -97,6 +97,8 @@
         state: restarted
 
     - name: restart_network
-      community.openwrt.service:
-        name: network
-        state: restarted
+      ansible.builtin.shell: "/etc/init.d/network restart >/dev/null 2>&1 &"
+      async: 1
+      poll: 0
+      changed_when: true
+      failed_when: false

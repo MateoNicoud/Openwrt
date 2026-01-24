@@ -1,15 +1,3 @@
-- name: Ensure WireGuard interface sections exist
-  when: enable_wireguard | bool
-  loop: "{{ wg_interfaces }}"
-  loop_control:
-    label: "{{ item.name }}"
-  community.openwrt.uci:
-    command: section
-    config: network
-    type: interface
-    name: "{{ item.name }}"
-  notify: restart_network
-
 - name: Configure WireGuard interfaces
   when: enable_wireguard | bool
   loop: "{{ wg_interfaces }}"
@@ -26,6 +14,7 @@
       addresses:
         - "{{ item.address }}"
   notify: restart_network
+
 
 - name: Remove managed WG peers
   when: enable_wireguard | bool

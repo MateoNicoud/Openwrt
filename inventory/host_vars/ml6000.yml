@@ -84,7 +84,6 @@ port_vlan_map:
     tagged: []
 
 # DHCP statiques (optionnel)
-#enable_dhcp_static_leases: false
 #dhcp_static_leases:
 #  - name: "pc-admin"
 #    mac: "AA:BB:CC:DD:EE:FF"

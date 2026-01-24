@@ -1,4 +1,18 @@
----
+- name: Compute valid DHCP static leases
+  ansible.builtin.set_fact:
+    dhcp_static_leases_filtered: >-
+      {{
+        (dhcp_static_leases | default([]))
+        | selectattr('name', 'defined')
+        | selectattr('mac', 'defined')
+        | selectattr('ip', 'defined')
+        | list
+      }}
+    dhcp_static_leases_valid: >-
+      {{
+        (dhcp_static_leases_filtered | length) > 0
+      }}
+
 - name: Configure dnsmasq base
   community.openwrt.uci:
     command: set
@@ -37,8 +51,8 @@
   notify: restart_dnsmasq
 
 - name: Remove static leases (only our deterministic names)
-  when: enable_dhcp_static_leases | bool
-  loop: "{{ dhcp_static_leases }}"
+  when: dhcp_static_leases_valid
+  loop: "{{ dhcp_static_leases_filtered }}"
   community.openwrt.uci:
     command: delete
     key: "dhcp.{{ item.name }}"
@@ -46,8 +60,8 @@
   notify: restart_dnsmasq
 
 - name: Add static leases (optional)
-  when: enable_dhcp_static_leases | bool
-  loop: "{{ dhcp_static_leases }}"
+  when: dhcp_static_leases_valid
+  loop: "{{ dhcp_static_leases_filtered }}"
   community.openwrt.uci:
     command: set
     key: "dhcp.{{ item.name }}"

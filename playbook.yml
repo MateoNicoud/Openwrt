@@ -90,6 +90,11 @@
       community.openwrt.service:
         name: adguardhome
         state: restarted
+  
+    - name: restart_dropbear
+      community.openwrt.service:
+        name: dropbear
+        state: restarted
 
     - name: restart_uhttpd
       community.openwrt.service:

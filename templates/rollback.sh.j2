@@ -1,28 +1,46 @@
-#!/bin/sh
-set -e
+#!/bin/ash
+set -eu
 
 DIR="{{ rollback_dir }}"
-STAMP="$(cat "$DIR/latest_ts" 2>/dev/null || true)"
+LOG="$DIR/rollback.log"
 
+mkdir -p "$DIR"
+exec >>"$LOG" 2>&1
+set -x
+echo "=== ROLLBACK START $(date) ==="
+
+STAMP="$(cat "$DIR/latest_ts" 2>/dev/null || true)"
 if [ -z "$STAMP" ]; then
   echo "No latest_ts found in $DIR; abort rollback."
   exit 1
 fi
 
-echo "Rolling back using snapshot $STAMP"
+SNAP="$DIR/config.$STAMP"
+echo "Rolling back using snapshot $STAMP (SNAP=$SNAP)"
 
-# restore /etc/config snapshot
-if [ -d "$DIR/config.$STAMP" ]; then
-  rm -rf /etc/config
-  cp -a "$DIR/config.$STAMP" /etc/config
+if [ ! -f "$SNAP/config/network" ]; then
+  echo "Snapshot seems invalid: $SNAP/config/network missing"
+  ls -la "$SNAP" || true
+  ls -la "$SNAP/config" || true
+  exit 1
 fi
 
-# reload services
+TS_NOW="$(date +%F_%H%M%S)"
+cp -a /etc/config "$DIR/config.pre_rollback.$TS_NOW" || true
+
+for f in network firewall dhcp wireless dropbear uhttpd; do
+  if [ -f "$SNAP/config/$f" ]; then
+    cp -a "$SNAP/config/$f" "/etc/config/$f"
+  fi
+done
+
+sync || true
+
 /etc/init.d/network restart || true
 /etc/init.d/firewall restart || true
 /etc/init.d/dnsmasq restart || true
-/etc/init.d/adguardhome restart || true
 /etc/init.d/dropbear restart || true
 /etc/init.d/uhttpd restart || true
+/etc/init.d/adguardhome restart || true
 
-echo "Rollback done."
+echo "=== ROLLBACK END $(date) ==="

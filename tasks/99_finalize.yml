@@ -1,15 +1,17 @@
 ---
 
-- name: Cancel scheduled rollback job (atrm)
+- name: Confirm success - cancel scheduled rollback job (atrm)
   when: enable_rollback_atd | bool
   ansible.builtin.shell: |
     set -e
     if [ -f "{{ rollback_dir }}/rollback_job_id" ]; then
-      JOB_ID="$(cat {{ rollback_dir }}/rollback_job_id)"
-      atrm "$JOB_ID" || true
-    else
-      echo "No rollback job to cancel"
+      JOB_ID="$(cat "{{ rollback_dir }}/rollback_job_id" 2>/dev/null || true)"
+      if [ -n "$JOB_ID" ]; then
+        atrm "$JOB_ID" 2>/dev/null || true
+      fi
+      rm -f "{{ rollback_dir }}/rollback_job_id"
     fi
+    rm -f "{{ rollback_dir }}/rollback_armed"
   args:
     executable: /bin/sh
   changed_when: false

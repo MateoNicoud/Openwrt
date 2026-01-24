@@ -77,17 +77,25 @@
   ignore_errors: true
   notify: restart_network
 
-- name: Create VLAN interfaces
+- name: Ensure interface sections exist
+  community.openwrt.uci:
+    command: section
+    config: network
+    type: interface
+    name: "{{ item.name }}"
   loop: "{{ vlans }}"
+  notify: restart_network
+
+- name: Configure VLAN interfaces
   community.openwrt.uci:
     command: set
     key: "network.{{ item.name }}"
     value:
-      type: "interface"
       proto: "static"
       device: "{{ openwrt_lan_bridge }}.{{ item.id }}"
       ipaddr: "{{ item.router_ip }}"
       netmask: "{{ item.netmask }}"
+  loop: "{{ vlans }}"
   notify: restart_network
 
 - name: Commit network

@@ -1,21 +1,28 @@
 ---
-- name: Ensure br-lan is bridge with ports
+- name: Ensure br-lan device section is a bridge
   community.openwrt.uci:
     command: set
-    key: "network.@device[0]"
+    key: "network.br_lan_dev"
     value:
       name: "{{ openwrt_lan_bridge }}"
       type: "bridge"
       ports: "{{ openwrt_lan_ports }}"
   notify: restart_network
 
-- name: Ensure bridge-vlan sections exist (brvlanX)
+- name: Delete existing brvlan sections if present
   loop: "{{ vlans }}"
   community.openwrt.uci:
-    command: add
-    config: network
-    type: bridge-vlan
-    name: "brvlan{{ item.id }}"
+    command: delete
+    key: "network.brvlan{{ item.id }}"
+  ignore_errors: true
+  notify: restart_network
+
+- name: Create bridge-vlan sections (brvlanX)
+  loop: "{{ vlans }}"
+  community.openwrt.uci:
+    command: set
+    key: "network.brvlan{{ item.id }}"
+    value: "bridge-vlan"
 
 - name: Set bridge-vlan device/vlan
   loop: "{{ vlans }}"

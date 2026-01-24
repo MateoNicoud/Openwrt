@@ -77,12 +77,13 @@
   ignore_errors: true
   notify: restart_network
 
-- name: Create VLAN interfaces (vlanX)
+- name: Create VLAN interfaces (use vlan name, avoid collisions)
   loop: "{{ vlans }}"
   community.openwrt.uci:
     command: set
-    key: "network.{{ uci_iface_prefix }}{{ item.id }}"
+    key: "network.{{ item.name }}"
     value:
+      type: "interface"
       proto: "static"
       device: "{{ openwrt_lan_bridge }}.{{ item.id }}"
       ipaddr: "{{ item.router_ip }}"

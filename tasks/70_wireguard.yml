@@ -19,6 +19,7 @@
     command: set
     key: "network.{{ item.name }}"
     value:
+      .type: "interface"
       proto: "wireguard"
       private_key: "{{ item.private_key }}"
       listen_port: "{{ item.listen_port | string }}"
@@ -62,8 +63,8 @@
       allowed_ips: "{{ item.allowed_ips }}"
       route_allowed_ips: "1"
       endpoint_host: "{{ item.endpoint_host | default(omit) }}"
-      endpoint_port: "{{ item.endpoint_port | default(omit) }}"
-      persistent_keepalive: "{{ item.persistent_keepalive | default(omit) }}"
+      endpoint_port: "{{ (item.endpoint_port | string) if (item.endpoint_port is defined) else omit }}"
+      persistent_keepalive: "{{ (item.persistent_keepalive | string) if (item.persistent_keepalive is defined) else omit }}"
   notify: restart_network
 
 - name: Commit network after WireGuard

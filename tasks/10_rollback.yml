@@ -1,11 +1,4 @@
 ---
-- name: Ensure rollback prerequisites are installed (at)
-  when: enable_rollback_atd | bool
-  community.openwrt.opkg:
-    name:
-      - at
-    state: present
-
 - name: Ensure atd is enabled and running
   when: enable_rollback_atd | bool
   ansible.builtin.raw: |

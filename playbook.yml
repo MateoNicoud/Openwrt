@@ -33,8 +33,6 @@
       delegate_to: localhost
       connection: local
       when: probe_old.failed
-  roles:
-    - community.openwrt.init
   tasks:
     - name: Import packages tasks
       ansible.builtin.import_tasks: tasks/00_packages.yml

@@ -1,5 +1,5 @@
 ---
-- name: Install base packages
+- name: "Install base packages"
   community.openwrt.opkg:
     name:
       - ca-bundle
@@ -9,13 +9,13 @@
     state: latest
     update_cache: true
 
-- name: Install rollback packages (at)
+- name: "Install rollback packages (at)"
   when: enable_rollback_atd | bool
   community.openwrt.opkg:
     name: at
     state: latest
 
-- name: Enable atd
+- name: "Enable atd
   when: enable_rollback_atd | bool
   community.openwrt.service:
     name: atd

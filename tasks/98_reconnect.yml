@@ -8,7 +8,7 @@
 
 - name: Wait for SSH on OLD mgmt IP (still available via alias)
   ansible.builtin.wait_for:
-    host: "{{ openwrt_mgmt_ip_default }}"
+    host: "{{ openwrt_old_mgmt_ip }}"
     port: "{{ ssh_port }}"
     timeout: 240
     state: started

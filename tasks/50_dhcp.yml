@@ -9,9 +9,17 @@
       rebind_protection: "1"
   notify: restart_dnsmasq
 
-- name: Configure DHCP scopes for each VLAN
+- name: Ensure DHCP sections exist for each VLAN
+  community.openwrt.uci:
+    command: section
+    config: dhcp
+    type: dhcp
+    name: "vlan{{ item.id }}"
   loop: "{{ vlans }}"
   when: item.dhcp.enabled | bool
+  notify: restart_dnsmasq
+
+- name: Configure DHCP scopes for each VLAN
   community.openwrt.uci:
     command: set
     key: "dhcp.vlan{{ item.id }}"
@@ -24,6 +32,8 @@
       dhcpv6: "disabled"
       ra: "disabled"
       dynamicdhcp: "{{ item.dhcp.dynamicdhcp }}"
+  loop: "{{ vlans }}"
+  when: item.dhcp.enabled | bool
   notify: restart_dnsmasq
 
 - name: Remove static leases (only our deterministic names)

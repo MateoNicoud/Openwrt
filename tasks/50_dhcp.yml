@@ -1,4 +1,5 @@
-- name: Compute valid DHCP static leases
+---
+- name: Build desired static leases list (filtered)
   ansible.builtin.set_fact:
     dhcp_static_leases_filtered: >-
       {{
@@ -8,59 +9,56 @@
         | selectattr('ip', 'defined')
         | list
       }}
-    dhcp_static_leases_valid: >-
+    dhcp_desired_host_names: >-
       {{
-        (dhcp_static_leases_filtered | length) > 0
+        (
+          (dhcp_static_leases | default([]))
+          | selectattr('name', 'defined')
+          | selectattr('mac', 'defined')
+          | selectattr('ip', 'defined')
+          | map(attribute='name')
+          | list
+        )
       }}
 
-- name: Configure dnsmasq base
-  community.openwrt.uci:
-    command: set
-    key: "dhcp.@dnsmasq[0]"
-    value:
-      authoritative: "1"
-      localservice: "1"
-      rebind_protection: "1"
-  notify: restart_dnsmasq
+- name: Read current dhcp config (uci show dhcp)
+  ansible.builtin.command: uci show dhcp
+  register: uci_dhcp_show
+  changed_when: false
 
-- name: Ensure DHCP sections exist for each VLAN
-  community.openwrt.uci:
-    command: section
-    config: dhcp
-    type: dhcp
-    name: "vlan{{ item.id }}"
-  loop: "{{ vlans }}"
-  when: item.dhcp.enabled | bool
-  notify: restart_dnsmasq
+- name: Extract existing DHCP host section names
+  ansible.builtin.set_fact:
+    dhcp_existing_host_names: >-
+      {{
+        uci_dhcp_show.stdout_lines
+        | select('match', '^dhcp\\.([^.]+)=host$')
+        | map('regex_replace', '^dhcp\\.([^.]+)=host$', '\\1')
+        | list
+        | unique
+      }}
 
-- name: Configure DHCP scopes for each VLAN
-  community.openwrt.uci:
-    command: set
-    key: "dhcp.vlan{{ item.id }}"
-    value:
-      interface: "{{ uci_iface_prefix }}{{ item.id }}"
-      start: "{{ item.dhcp.start }}"
-      limit: "{{ item.dhcp.limit }}"
-      leasetime: "{{ item.dhcp.leasetime }}"
-      dhcpv4: "server"
-      dhcpv6: "disabled"
-      ra: "disabled"
-      dynamicdhcp: "{{ item.dhcp.dynamicdhcp }}"
-  loop: "{{ vlans }}"
-  when: item.dhcp.enabled | bool
-  notify: restart_dnsmasq
+- name: Compute DHCP host sections to remove
+  ansible.builtin.set_fact:
+    dhcp_hosts_to_remove: "{{ dhcp_existing_host_names | difference(dhcp_desired_host_names) }}"
 
-- name: Remove static leases (only our deterministic names)
-  when: dhcp_static_leases_valid
-  loop: "{{ dhcp_static_leases_filtered }}"
+- name: Remove DHCP host sections not declared in host_vars
+  loop: "{{ dhcp_hosts_to_remove }}"
   community.openwrt.uci:
     command: delete
-    key: "dhcp.{{ item.name }}"
+    key: "dhcp.{{ item }}"
   ignore_errors: true
   notify: restart_dnsmasq
 
-- name: Add static leases (optional)
-  when: dhcp_static_leases_valid
+- name: Ensure DHCP host sections exist for desired leases
+  loop: "{{ dhcp_static_leases_filtered }}"
+  community.openwrt.uci:
+    command: section
+    config: dhcp
+    type: host
+    name: "{{ item.name }}"
+  notify: restart_dnsmasq
+
+- name: Apply desired DHCP static leases
   loop: "{{ dhcp_static_leases_filtered }}"
   community.openwrt.uci:
     command: set

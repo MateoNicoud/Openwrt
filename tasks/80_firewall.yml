@@ -1,5 +1,12 @@
 ---
-- name: Configure firewall defaults
+- name: Configure firewall defaults (ensure section type)
+  community.openwrt.uci:
+    command: set
+    key: "firewall.@defaults[0]"
+    value: "defaults"
+  notify: restart_firewall
+
+- name: Configure firewall defaults (values)
   community.openwrt.uci:
     command: set
     key: "firewall.@defaults[0]"
@@ -8,6 +15,16 @@
       output: "ACCEPT"
       forward: "REJECT"
       syn_flood: "1"
+  notify: restart_firewall
+
+# -------------------------
+# WAN zone
+# -------------------------
+- name: Ensure WAN zone section exists (type=zone)
+  community.openwrt.uci:
+    command: set
+    key: "firewall.wan"
+    value: "zone"
   notify: restart_firewall
 
 - name: Ensure WAN zone (masq)
@@ -24,6 +41,17 @@
       mtu_fix: "1"
   notify: restart_firewall
 
+# -------------------------
+# VLAN zones
+# -------------------------
+- name: Ensure VLAN zone sections exist (type=zone)
+  loop: "{{ vlans }}"
+  community.openwrt.uci:
+    command: set
+    key: "firewall.{{ item.name }}"
+    value: "zone"
+  notify: restart_firewall
+
 - name: Create VLAN zones (mgmt ACCEPT, svc/guest REJECT)
   loop: "{{ vlans }}"
   community.openwrt.uci:
@@ -37,6 +65,9 @@
       forward: "{{ item.zone.forward }}"
   notify: restart_firewall
 
+# -------------------------
+# Cleanup deterministic forwardings/rules
+# -------------------------
 - name: Remove deterministic forwardings (vlan->wan)
   loop: "{{ vlans }}"
   community.openwrt.uci:
@@ -45,7 +76,7 @@
   ignore_errors: true
   notify: restart_firewall
 
-- name: Remove deterministic rules (dns/dhcp blocks)
+- name: Remove deterministic rules (dhcp)
   loop: "{{ vlans }}"
   community.openwrt.uci:
     command: delete
@@ -61,6 +92,18 @@
   ignore_errors: true
   notify: restart_firewall
 
+# -------------------------
+# Forwardings VLAN -> WAN (optional)
+# -------------------------
+- name: Ensure forwarding sections exist (type=forwarding) when enabled
+  loop: "{{ vlans }}"
+  when: allow_outbound_to_wan[item.name] | default(false) | bool
+  community.openwrt.uci:
+    command: set
+    key: "firewall.fwd_{{ item.name }}_wan"
+    value: "forwarding"
+  notify: restart_firewall
+
 - name: Create forwardings VLAN -> WAN (outbound only)
   loop: "{{ vlans }}"
   when: allow_outbound_to_wan[item.name] | default(false) | bool
@@ -70,6 +113,18 @@
     value:
       src: "{{ item.name }}"
       dest: "wan"
+  notify: restart_firewall
+
+# -------------------------
+# DHCP/DNS allow to router (rules) for non-mgmt
+# -------------------------
+- name: Ensure DHCP rule sections exist (type=rule) for non-mgmt
+  loop: "{{ vlans }}"
+  when: item.name != "mgmt"
+  community.openwrt.uci:
+    command: set
+    key: "firewall.allow_dhcp_{{ item.name }}"
+    value: "rule"
   notify: restart_firewall
 
 - name: Allow DHCP to router for non-mgmt zones
@@ -86,6 +141,15 @@
       target: "ACCEPT"
   notify: restart_firewall
 
+- name: Ensure DNS rule sections exist (type=rule) for non-mgmt
+  loop: "{{ vlans }}"
+  when: item.name != "mgmt"
+  community.openwrt.uci:
+    command: set
+    key: "firewall.allow_dns_{{ item.name }}"
+    value: "rule"
+  notify: restart_firewall
+
 - name: Allow DNS to router for non-mgmt zones
   loop: "{{ vlans }}"
   when: item.name != "mgmt"
@@ -100,6 +164,16 @@
       target: "ACCEPT"
   notify: restart_firewall
 
+# -------------------------
+# Explicit blocks (rules)
+# -------------------------
+- name: Ensure rule section exists (type=rule) block svc->mgmt
+  community.openwrt.uci:
+    command: set
+    key: "firewall.block_svc_to_mgmt"
+    value: "rule"
+  notify: restart_firewall
+
 - name: Explicitly block svc -> mgmt (extra safety)
   community.openwrt.uci:
     command: set
@@ -109,6 +183,13 @@
       src: "svc"
       dest: "mgmt"
       target: "REJECT"
+  notify: restart_firewall
+
+- name: Ensure rule section exists (type=rule) block guest->mgmt
+  community.openwrt.uci:
+    command: set
+    key: "firewall.block_guest_to_mgmt"
+    value: "rule"
   notify: restart_firewall
 
 - name: Explicitly block guest -> mgmt (extra safety)
@@ -122,6 +203,9 @@
       target: "REJECT"
   notify: restart_firewall
 
+# -------------------------
+# WireGuard zones / forwardings / ingress rules
+# -------------------------
 - name: Remove deterministic WG zones
   when: enable_wireguard | bool
   loop: "{{ wg_firewall_zones }}"
@@ -129,6 +213,15 @@
     command: delete
     key: "firewall.{{ item.name }}"
   ignore_errors: true
+  notify: restart_firewall
+
+- name: Ensure WG zone sections exist (type=zone)
+  when: enable_wireguard | bool
+  loop: "{{ wg_firewall_zones }}"
+  community.openwrt.uci:
+    command: set
+    key: "firewall.{{ item.name }}"
+    value: "zone"
   notify: restart_firewall
 
 - name: Create Firewall zones for WireGuard (multi)
@@ -154,6 +247,15 @@
   ignore_errors: true
   notify: restart_firewall
 
+- name: Ensure WG forwarding sections exist (type=forwarding)
+  when: enable_wireguard | bool
+  loop: "{{ wg_forwardings | default([]) }}"
+  community.openwrt.uci:
+    command: set
+    key: "firewall.fwd_{{ item.src }}_{{ item.dest }}"
+    value: "forwarding"
+  notify: restart_firewall
+
 - name: Create WG forwardings (optional)
   when: enable_wireguard | bool
   loop: "{{ wg_forwardings | default([]) }}"
@@ -174,6 +276,15 @@
   ignore_errors: true
   notify: restart_firewall
 
+- name: Ensure WG ingress rule sections exist (type=rule)
+  when: enable_wireguard | bool
+  loop: "{{ wg_ingress_rules | default([]) }}"
+  community.openwrt.uci:
+    command: set
+    key: "firewall.wg_ingress_{{ item.name | lower | regex_replace('[^a-z0-9]+','_') }}"
+    value: "rule"
+  notify: restart_firewall
+
 - name: Create WG ingress rules (port-only)
   when: enable_wireguard | bool
   loop: "{{ wg_ingress_rules | default([]) }}"
@@ -191,6 +302,9 @@
       target: "{{ item.target }}"
   notify: restart_firewall
 
+# -------------------------
+# Commit
+# -------------------------
 - name: Commit firewall
   community.openwrt.uci:
     command: commit

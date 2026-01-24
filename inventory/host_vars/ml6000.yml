@@ -119,21 +119,21 @@ enable_wireguard: true
 
 wg_interfaces:
   # Admin
-  - name: "wg-admin-mgmt"
+  - name: "wg_admin-mgmt"
     address: "10.10.2.1/24"
     listen_port: 51820
     private_key: "{{ vault_wg_admin_mgmt_private_key }}"
     allowed_lans: ["192.168.2.0/24"]
     firewall_zone: "vpn_admin"
 
-  - name: "wg-admin-svc"
+  - name: "wg_admin-svc"
     address: "10.10.3.1/24"
     listen_port: 51821
     private_key: "{{ vault_wg_admin_svc_private_key }}"
     allowed_lans: ["192.168.3.0/24"]
     firewall_zone: "vpn_admin"
 
-  - name: "wg-admin-asus"
+  - name: "wg_admin-asus"
     address: "10.10.4.1/24"
     listen_port: 51822
     private_key: "{{ vault_wg_admin_asus_private_key }}"
@@ -141,7 +141,7 @@ wg_interfaces:
     firewall_zone: "vpn_admin"
 
   # Ingress depuis le VPS (trafic “public” encapsulé)
-  - name: "wg-ingress"
+  - name: "wg_ingress"
     address: "10.20.0.2/32"
     listen_port: 51830
     private_key: "{{ vault_wg_ingress_private_key }}"
@@ -151,23 +151,23 @@ wg_interfaces:
 # Peers
 wg_peers:
   # Admin client (ton PC)
-  - interface: "wg-admin-mgmt"
+  - interface: "wg_admin-mgmt"
     name: "admin_client"
     public_key: "{{ vault_wg_peer_admin_public_key }}"
     allowed_ips: ["10.10.2.2/32"]
 
-  - interface: "wg-admin-svc"
+  - interface: "wg_admin-svc"
     name: "admin_client"
     public_key: "{{ vault_wg_peer_admin_public_key }}"
     allowed_ips: ["10.10.3.2/32"]
 
-  - interface: "wg-admin-asus"
+  - interface: "wg_admin-asus"
     name: "admin_client"
     public_key: "{{ vault_wg_peer_admin_public_key }}"
     allowed_ips: ["10.10.4.2/32"]
 
   # VPS hub (OpenWrt initie vers le VPS)
-  - interface: "wg-ingress"
+  - interface: "wg_ingress"
     name: "vps_hub"
     public_key: "{{ vault_wg_peer_vps_public_key }}"
     # AllowedIPs côté OpenWrt: IP WG du VPS dans le tunnel.
@@ -183,13 +183,13 @@ wg_firewall_zones:
     input: "ACCEPT"
     output: "ACCEPT"
     forward: "ACCEPT"
-    networks: ["wg-admin-mgmt", "wg-admin-svc", "wg-admin-asus"]
+    networks: ["wg_admin-mgmt", "wg_admin-svc", "wg_admin-asus"]
 
   - name: "vpn_ingress"
     input: "REJECT"
     output: "ACCEPT"
     forward: "REJECT"
-    networks: ["wg-ingress"]
+    networks: ["wg_ingress"]
 
 # Forwardings optionnels (admin only)
 wg_forwardings:

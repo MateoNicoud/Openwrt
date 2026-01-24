@@ -2,14 +2,14 @@
 
 - name: Cancel scheduled rollback job (atrm)
   when: enable_rollback_atd | bool
-  community.openwrt.command:
-    command: |
-      set -e
-      if [ -f "{{ rollback_dir }}/rollback_job_id" ]; then
-        JOB_ID="$(cat {{ rollback_dir }}/rollback_job_id)"
-        atrm "$JOB_ID" || true
-      else
-        echo "No rollback job to cancel"
-      fi
-    uses_shell: true
+  ansible.builtin.shell: |
+    set -e
+    if [ -f "{{ rollback_dir }}/rollback_job_id" ]; then
+      JOB_ID="$(cat {{ rollback_dir }}/rollback_job_id)"
+      atrm "$JOB_ID" || true
+    else
+      echo "No rollback job to cancel"
+    fi
+  args:
+    executable: /bin/sh
   changed_when: false

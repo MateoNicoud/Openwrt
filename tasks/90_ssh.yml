@@ -83,8 +83,8 @@
       when: 
         - vault_root_password_hash is defined
         - enable_luci | bool
-      community.openwrt.command:
-        command: |
-          set -e
-          usermod -p '{{ vault_root_password_hash }}' root
-        uses_shell: true
+      ansible.builtin.shell: |
+        set -e
+        usermod -p '{{ vault_root_password_hash }}' root
+      args:
+        executable: /bin/sh

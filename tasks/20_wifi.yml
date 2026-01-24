@@ -8,13 +8,13 @@
     quiet: true
 
 - name: Discover existing WiFi radios (radio*)
-  community.openwrt.command:
-    command: |
-      set -e
-      uci show wireless 2>/dev/null \
-        | sed -n "s/^wireless\.\(radio[0-9]\+\)\..*/\1/p" \
-        | sort -u
-    uses_shell: true
+  ansible.builtin.shell: |      
+    set -e
+    uci show wireless 2>/dev/null \
+      | sed -n "s/^wireless\.\(radio[0-9]\+\)\..*/\1/p" \
+      | sort -u
+  args:
+    executable: /bin/sh
   register: wifi_radios_discovered
   changed_when: false
   failed_when: false

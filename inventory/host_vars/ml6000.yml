@@ -5,6 +5,11 @@ openwrt_mgmt_ip_default: "192.168.1.1"
 openwrt_new_mgmt_ip: "192.168.2.1"
 ssh_port: 22
 
+base_packages:
+  - ca-bundle
+  - dnsmasq
+  - firewall4
+  - kmod-8021q
 # WAN
 openwrt_wan_ifname: "eth1"
 openwrt_wan_proto: "dhcp"

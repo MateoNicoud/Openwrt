@@ -13,7 +13,7 @@
   when: enable_rollback_atd | bool
   community.openwrt.opkg:
     name: at
-    state: latest
+    state: present
 
 - name: "Enable atd"
   when: enable_rollback_atd | bool
@@ -26,7 +26,7 @@
   when: enable_adguardhome | bool
   community.openwrt.opkg:
     name: adguardhome
-    state: latest
+    state: present
 
 - name: Install WireGuard packages
   when: enable_wireguard | bool
@@ -34,4 +34,4 @@
     name:
       - wireguard-tools
       - kmod-wireguard
-    state: latest
+    state: present

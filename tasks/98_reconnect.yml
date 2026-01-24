@@ -1,4 +1,8 @@
 ---
+- name: Sanity check - mgmt IP configured before restart
+  ansible.builtin.shell: "ip -4 addr show | grep -q '{{ openwrt_new_mgmt_ip }}/' "
+  changed_when: false
+
 - name: Restart network now (expect brief disconnect)
   ansible.builtin.meta: flush_handlers
 
@@ -6,12 +10,6 @@
   ansible.builtin.set_fact:
     ansible_host: "{{ openwrt_new_mgmt_ip }}"
 
-- name: Restart network to drop current SSH session (OpenWrt)
-  community.openwrt.service:
-    name: network
-    state: restarted
-  ignore_errors: true
-  changed_when: true
 
 - name: Verify SSH access with NEW rules
   ansible.builtin.wait_for:

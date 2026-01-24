@@ -70,14 +70,14 @@
       proto: "{{ openwrt_wan_proto }}"
   notify: restart_network
 
-- name: Delete default network.lan (we use vlan interfaces)
+- name: Delete default network.lan
   community.openwrt.uci:
     command: delete
     key: "network.lan"
   ignore_errors: true
   notify: restart_network
 
-- name: Create VLAN interfaces (use vlan name, avoid collisions)
+- name: Create VLAN interfaces
   loop: "{{ vlans }}"
   community.openwrt.uci:
     command: set

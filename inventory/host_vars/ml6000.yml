@@ -9,7 +9,6 @@ base_packages:
   - ca-bundle
   - dnsmasq
   - firewall4
-  - kmod-8021q
 # WAN
 openwrt_wan_ifname: "eth1"
 openwrt_wan_proto: "dhcp"

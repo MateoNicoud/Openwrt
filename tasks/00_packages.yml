@@ -1,13 +1,12 @@
 ---
-- name: Update opkg cache
-  community.general.opkg:
-    update_cache: true
+- name: Update opkg package lists
+  ansible.builtin.raw: opkg update
+  changed_when: false
 
 - name: "Install base packages"
   community.openwrt.opkg:
-    name: "{{ item.name }}"
-    state: latest
-    update_cache: false
+    name: "{{ item }}"
+    state: present
   loop: "{{ base_packages }}"
 
 - name: "Install rollback packages (at)"

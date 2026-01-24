@@ -1,4 +1,15 @@
----
+- name: Ensure WireGuard interface sections exist
+  when: enable_wireguard | bool
+  loop: "{{ wg_interfaces }}"
+  loop_control:
+    label: "{{ item.name }}"
+  community.openwrt.uci:
+    command: section
+    config: network
+    type: interface
+    name: "{{ item.name }}"
+  notify: restart_network
+
 - name: Configure WireGuard interfaces
   when: enable_wireguard | bool
   loop: "{{ wg_interfaces }}"
@@ -17,7 +28,7 @@
 
 - name: Remove managed WG peers
   when: enable_wireguard | bool
-  loop: "{{ wg_peers }}"
+  loop: "{{ wg_peers | default([]) }}"
   loop_control:
     label: "peer_{{ item.name }}_{{ item.interface }}"
   community.openwrt.uci:
@@ -26,30 +37,33 @@
   ignore_errors: true
   notify: restart_network
 
-- name: Create WG peers (OpenWrt wireguard_<interface> sections)
+- name: Ensure WG peer sections exist
   when: enable_wireguard | bool
-  loop: "{{ wg_peers }}"
+  loop: "{{ wg_peers | default([]) }}"
   loop_control:
-    label: "peer_{{ item.name }}_{{ item.interface }} -> wireguard_{{ item.interface }}"
-  vars:
-    peer_section: "peer_{{ item.name }}_{{ item.interface }}"
-    peer_value: >-
-      {{
-        {
-          '.type': 'wireguard_' ~ item.interface,
-          'public_key': item.public_key,
-          'allowed_ips': item.allowed_ips,
-          'route_allowed_ips': '1'
-        }
-        | combine(item.endpoint_host is defined | ternary({'endpoint_host': item.endpoint_host}, {}))
-        | combine(item.endpoint_port is defined | ternary({'endpoint_port': (item.endpoint_port | string)}, {}))
-        | combine(item.persistent_keepalive is defined | ternary({'persistent_keepalive': (item.persistent_keepalive | string)}, {}))
-        | combine(item.description is defined | ternary({'description': item.description}, {}))
-      }}
+    label: "peer_{{ item.name }}_{{ item.interface }}"
+  community.openwrt.uci:
+    command: section
+    config: network
+    type: "wireguard_{{ item.interface }}"
+    name: "peer_{{ item.name }}_{{ item.interface }}"
+  notify: restart_network
+
+- name: Configure WG peers
+  when: enable_wireguard | bool
+  loop: "{{ wg_peers | default([]) }}"
+  loop_control:
+    label: "peer_{{ item.name }}_{{ item.interface }}"
   community.openwrt.uci:
     command: set
-    key: "network.{{ peer_section }}"
-    value: "{{ peer_value }}"
+    key: "network.peer_{{ item.name }}_{{ item.interface }}"
+    value:
+      public_key: "{{ item.public_key }}"
+      allowed_ips: "{{ item.allowed_ips }}"
+      route_allowed_ips: "1"
+      endpoint_host: "{{ item.endpoint_host | default(omit) }}"
+      endpoint_port: "{{ item.endpoint_port | default(omit) }}"
+      persistent_keepalive: "{{ item.persistent_keepalive | default(omit) }}"
   notify: restart_network
 
 - name: Commit network after WireGuard

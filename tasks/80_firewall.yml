@@ -345,6 +345,40 @@
       dest_port: "{{ item.dest_port }}"
       target: "{{ item.target }}"
 
+# legacy -> mgmt
+- name: Allow legacy -> mgmt
+  community.openwrt.uci:
+    command: set
+    key: "firewall.fwd_legacy_mgmt"
+    value: "forwarding"
+  notify: restart_firewall
+
+- name: Set forwarding legacy -> mgmt
+  community.openwrt.uci:
+    command: set
+    key: "firewall.fwd_legacy_mgmt"
+    value:
+      src: "legacy"
+      dest: "mgmt"
+  notify: restart_firewall
+
+# mgmt -> legacy
+- name: Allow mgmt -> legacy
+  community.openwrt.uci:
+    command: set
+    key: "firewall.fwd_mgmt_legacy"
+    value: "forwarding"
+  notify: restart_firewall
+
+- name: Set forwarding mgmt -> legacy
+  community.openwrt.uci:
+    command: set
+    key: "firewall.fwd_mgmt_legacy"
+    value:
+      src: "mgmt"
+      dest: "legacy"
+  notify: restart_firewall
+
 # -------------------------
 # Validate + Commit
 # -------------------------

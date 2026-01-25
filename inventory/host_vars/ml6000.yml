@@ -26,6 +26,16 @@ openwrt_lan_ports: ["lan1","lan2","lan3","lan4","lan5"]
 
 # VLANs (schéma unique, utilisé partout)
 vlans:
+  - id: 1
+    name: legacy
+    router_ip: "192.168.1.254"
+    netmask: "255.255.255.0"
+    zone:
+      input: "ACCEPT"
+      output: "ACCEPT"
+      forward: "ACCEPT"
+    dhcp:
+      enabled: false
   - id: 2
     name: mgmt
     router_ip: "192.168.2.1"
@@ -73,7 +83,7 @@ vlans:
 # Notation: untagged => VLAN "access" (PVID), tagged => trunk
 port_vlan_map:
   lan1:
-    untagged: [2]
+    untagged: [1, 2]
     tagged: []
   lan2:
     untagged: [2]
@@ -82,7 +92,7 @@ port_vlan_map:
     untagged: [2]
     tagged: [3]
   lan4:
-    untagged: [2]
+    untagged: [1, 2]
     tagged: [4]
   lan5:
     untagged: [2]
